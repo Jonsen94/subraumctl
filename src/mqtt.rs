@@ -51,8 +51,8 @@ impl MqttOptions {
 
     pub fn connect(&self) -> Result<paho::Client, MqttError> {
         let create = paho::CreateOptionsBuilder::new()
-            .server_uri(&self.broker)
-            .client_id(&self.client_id)
+            .server_uri(self.broker.as_str())
+            .client_id(self.client_id.as_str())
             .persistence(paho::PersistenceType::None)
             .finalize();
 
