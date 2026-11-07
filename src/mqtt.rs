@@ -220,7 +220,11 @@ pub fn spawn_supervisor(
                     match command_rx.try_recv() {
                         Ok(MqttCommand::Connect) => {
                             manual_disconnect = false;
-                            if !connected {
+                            if connected {
+                                // Re-announce the current generation so the
+                                // UI can leave its optimistic connecting state.
+                                let _ = event_tx.send(MqttEvent::Connected { generation });
+                            } else {
                                 next_retry = Some(Instant::now());
                             }
                         }
