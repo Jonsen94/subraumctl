@@ -13,9 +13,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError}
 
 use crate::action::TOPIC_ALERT_CONDITION;
 
-mod request;
-pub use request::{MqttRequest, request_once};
-
 /// Topics the TUI subscribes to after every (re)connect.
 pub const STATUS_TOPICS: &[&str] = &[
     TOPIC_ALERT_CONDITION,
@@ -105,10 +102,6 @@ pub enum MqttError {
 
 #[derive(Debug)]
 pub enum MqttCommand {
-    Request {
-        request: MqttRequest,
-        reply: tokio::sync::oneshot::Sender<Result<String, String>>,
-    },
     Connect,
     Disconnect,
     Reconnect,
@@ -225,7 +218,6 @@ pub fn spawn_supervisor(
             let mut attempt: u32 = 0;
             let mut backoff = Duration::from_secs(1);
             let mut next_retry: Option<Instant> = None;
-            let mut pending = Vec::new();
 
             loop {
                 let mut stop = false;
@@ -242,7 +234,6 @@ pub fn spawn_supervisor(
                             }
                         }
                         Ok(MqttCommand::Disconnect) => {
-                            request::fail_pending(&mut pending, client.as_ref(), "MQTT disconnected; command may have been applied");
                             manual_disconnect = true;
                             next_retry = None;
                             receiver = None;
@@ -253,7 +244,6 @@ pub fn spawn_supervisor(
                             });
                         }
                         Ok(MqttCommand::Reconnect) => {
-                            request::fail_pending(&mut pending, client.as_ref(), "MQTT reconnect requested; command may have been applied");
                             manual_disconnect = false;
                             receiver = None;
                             stop_client(&mut client);
@@ -261,21 +251,6 @@ pub fn spawn_supervisor(
                             attempt = 0;
                             backoff = Duration::from_secs(1);
                             next_retry = Some(Instant::now());
-                        }
-                        Ok(MqttCommand::Request { request: wire, reply }) => {
-                            if reply.is_closed() { continue; }
-                            match client.as_ref().filter(|client| connected && client.is_connected()) {
-                                Some(client) => match request::start(client, &wire) {
-                                    Ok(()) => {
-                                        let _ = event_tx.send(MqttEvent::Published {
-                                            topic: wire.topic.clone(), payload: wire.payload.clone(), retain: false,
-                                        });
-                                        pending.push(request::Pending::new(wire, reply));
-                                    }
-                                    Err(error) => { let _ = reply.send(Err(error)); }
-                                },
-                                None => { let _ = reply.send(Err("Not connected — command not sent.".into())); }
-                            }
                         }
                         Ok(MqttCommand::Publish {
                             topic,
@@ -324,7 +299,6 @@ pub fn spawn_supervisor(
                 }
 
                 if stop {
-                    request::fail_pending(&mut pending, client.as_ref(), "MQTT supervisor stopped; command may have been applied");
                     stop_client(&mut client);
                     break;
                 }
@@ -335,7 +309,6 @@ pub fn spawn_supervisor(
                         .map(|client| client.is_connected())
                         .unwrap_or(false);
                     if !alive {
-                        request::fail_pending(&mut pending, client.as_ref(), "MQTT connection lost; command may have been applied");
                         connected = false;
                         let _ = event_tx.send(MqttEvent::ConnectionLost {
                             generation,
@@ -362,8 +335,7 @@ pub fn spawn_supervisor(
                     attempt = attempt.saturating_add(1);
                     let _ = event_tx.send(MqttEvent::Connecting { attempt });
                     match options.connect() {
-                        Ok(mut new_client) => {
-                            new_client.set_timeout(Duration::from_secs(5));
+                        Ok(new_client) => {
                             generation = generation.wrapping_add(1);
                             for topic in STATUS_TOPICS {
                                 let _ = new_client.subscribe(topic, 0);
@@ -395,7 +367,6 @@ pub fn spawn_supervisor(
                 // this method call is resolved.
                 if let Some(receiver) = &receiver {
                     while let Ok(Some(message)) = receiver.try_recv() {
-                        request::handle_reply(&mut pending, client.as_ref(), &message);
                         let topic = message.topic().to_string();
                         let payload = String::from_utf8_lossy(message.payload()).into_owned();
                         let _ = event_tx.send(MqttEvent::Message {
@@ -406,7 +377,6 @@ pub fn spawn_supervisor(
                     }
                 }
 
-                request::expire_pending(&mut pending, client.as_ref());
                 std::thread::sleep(Duration::from_millis(25));
             }
         })

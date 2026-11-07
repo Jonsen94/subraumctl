@@ -106,20 +106,16 @@ fn dry_run_reads_work_without_mqtt_and_cancelled_forms_do_not_send() {
 }
 
 #[test]
-fn live_requests_require_the_existing_mqtt_connection() {
-    use crate::tui::app::ConnectionState;
-    let (mut app, mut rx) = app();
-    app.options.dry_run = false;
-    choose(&mut app, Operation::List);
-    assert!(rx.try_recv().is_err());
-    assert!(app.status.as_ref().unwrap().text.contains("Not connected"));
-    app.connection = ConnectionState::Connected {
-        since: std::time::Instant::now(),
-    };
-    choose(&mut app, Operation::Clear);
-    assert!(app.popup.is_none());
-    assert_eq!(rx.try_recv().unwrap().operation, Operation::Clear);
-    assert!(app.pizzamat.busy);
+fn live_requests_work_without_mqtt() {
+    for operation in [Operation::List, Operation::Clear] {
+        let (mut app, mut rx) = app();
+        app.options.dry_run = false;
+        assert!(!app.connection.is_connected());
+        choose(&mut app, operation);
+        assert!(app.popup.is_none());
+        assert_eq!(rx.try_recv().unwrap().operation, operation);
+        assert!(app.pizzamat.busy);
+    }
 }
 
 #[test]

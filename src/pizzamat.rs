@@ -5,8 +5,11 @@ use std::time::Duration;
 
 pub mod transport;
 
+pub const DEFAULT_AMQP_URL: &str = "amqp://amqp.subraum.c3pb.de:5672/%2f";
+
 #[derive(Clone)]
 pub struct Options {
+    pub amqp_url: String,
     pub user: String,
     pub debug: bool,
     pub timeout: Duration,
@@ -15,6 +18,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            amqp_url: DEFAULT_AMQP_URL.into(),
             user: String::new(),
             debug: false,
             timeout: Duration::from_secs(15),
@@ -25,6 +29,7 @@ impl Default for Options {
 impl Options {
     pub fn from_global(global: &crate::cli::GlobalArgs) -> Self {
         Self {
+            amqp_url: global.pizzamat_amqp_url.clone(),
             user: global.pizzamat_user.clone().unwrap_or_default(),
             debug: global.pizzamat_debug,
             timeout: Duration::from_secs(global.pizzamat_timeout),

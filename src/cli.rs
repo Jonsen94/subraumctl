@@ -20,7 +20,7 @@ use crate::smoothiesaur::DEFAULT_SMOOTHIE_URL;
     version,
     about = "Control the subraum over MQTT",
     long_about = "subraumctl controls the subraum lights, outlets, alerts, animation knobs and \
-smoothiesaur over MQTT (TCP) and HTTP, and Pizzamat food orders over MQTT. \
+smoothiesaur over MQTT (TCP) and HTTP, and Pizzamat food orders over EDI AMQP. \
 It also provides a keyboard-driven ratatui TUI \
 with safe mode, automatic reconnects, a live traffic pane and an application log pane.",
     after_help = "Broker: normal MQTT over TCP (tcp:// or ssl://), no WebSockets.\n\
@@ -90,6 +90,10 @@ pub struct GlobalArgs {
         default_value = DEFAULT_SMOOTHIE_URL
     )]
     pub smoothiesaur_url: String,
+
+    /// Pizzamat EDI AMQP endpoint
+    #[arg(long, global = true, env = "SUBRAUMCTL_PIZZAMAT_AMQP_URL", default_value = crate::pizzamat::DEFAULT_AMQP_URL)]
+    pub pizzamat_amqp_url: String,
 
     /// Pizzamat order identity; use the same identity as your existing bot orders
     #[arg(long, global = true, env = "SUBRAUMCTL_PIZZAMAT_USER")]

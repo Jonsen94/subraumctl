@@ -17,6 +17,8 @@ color-eyre = "0.6"
 crossterm = "0.29"
 csscolorparser = "0.9"
 eyre = "0.6"
+futures-lite = "2"
+lapin = "3"
 paho-mqtt = { version = "0.14", features = ["bundled", "ssl"] }
 ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 reqwest = "0.13"

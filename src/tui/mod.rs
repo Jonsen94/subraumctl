@@ -61,7 +61,12 @@ pub async fn run(options: TuiOptions) -> Result<()> {
 
     let (pizza_tx, pizza_rx) = mpsc::unbounded_channel();
     let (pizza_event_tx, mut pizza_event_rx) = mpsc::unbounded_channel();
-    pizzamat::spawn_worker(mqtt_tx.clone(), options.pizzamat.clone(), options.dry_run, pizza_rx, pizza_event_tx);
+    pizzamat::spawn_worker(
+        options.pizzamat.clone(),
+        options.dry_run,
+        pizza_rx,
+        pizza_event_tx,
+    );
     let mut app = app::App::new(options, mqtt_tx, http_tx, pizza_tx);
     let mut ticker = interval(Duration::from_millis(100));
 

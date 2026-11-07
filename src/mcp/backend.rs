@@ -79,20 +79,14 @@ impl Backend for DeviceBackend {
         request: crate::pizzamat::Request,
         context: RequestContext<RoleServer>,
     ) -> Result<Value> {
-        if self.dry_run {
-            return Ok(crate::pizzamat::transport::preview(&self.pizzamat, &request));
-        }
-        let guard = tokio::select! {
-            guard = self.gate.clone().lock_owned() => guard,
+        let _guard = tokio::select! {
+            guard = self.gate.lock() => guard,
             _ = context.ct.cancelled() => return Err(eyre!("request cancelled")),
         };
         ensure!(!context.ct.is_cancelled(), "request cancelled");
-        let mqtt = self.mqtt.clone();
-        let options = self.pizzamat.clone();
-        tokio::task::spawn_blocking(move || {
-            let _guard = guard;
-            crate::pizzamat::transport::execute(&mqtt, &options, &request, || context.ct.is_cancelled())
-        }).await.map_err(|_| eyre!("MQTT worker failed"))?
+        // Finish the bounded exchange and close its private reply queue even if
+        // the caller cancels after submission. Never replay order mutations.
+        crate::pizzamat::transport::execute(&self.pizzamat, &request, self.dry_run).await
     }
 
     async fn snapshot(

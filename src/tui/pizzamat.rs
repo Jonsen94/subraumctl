@@ -5,7 +5,6 @@ use tui_input::Input;
 use super::app::{App, Section, StatusKind, TextInputMode, TextInputState};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
 use crate::pizzamat::{Operation, Options, Request, transport};
-use crate::mqtt::MqttCommand;
 
 #[derive(Default)]
 pub struct State {
@@ -21,7 +20,6 @@ pub struct Event {
 }
 
 pub fn spawn_worker(
-    mqtt: UnboundedSender<MqttCommand>,
     options: Options,
     dry_run: bool,
     mut rx: UnboundedReceiver<Request>,
@@ -30,14 +28,14 @@ pub fn spawn_worker(
     tokio::spawn(async move {
         while let Some(request) = rx.recv().await {
             let result = async {
-                let reply = transport::via_supervisor(&mqtt, &options, &request, dry_run).await?;
+                let reply = transport::execute(&options, &request, dry_run).await?;
                 let mut text = reply["message"]
                     .as_str()
                     .map(str::to_string)
                     .unwrap_or_else(|| reply.to_string());
                 if !request.operation.read_only() && !dry_run {
                     let list = Request::new(Operation::List, &request.user, &[])?;
-                    match transport::via_supervisor(&mqtt, &options, &list, false).await {
+                    match transport::execute(&options, &list, false).await {
                         Ok(orders) => {
                             text.push_str("\n\nCurrent orders:\n");
                             text.push_str(orders["message"].as_str().unwrap_or_default());
@@ -115,10 +113,6 @@ impl App {
         if self.pizzamat.busy {
             return;
         }
-        if !self.options.dry_run && !self.connection.is_connected() {
-            self.set_status("Not connected — command not sent.", StatusKind::Error);
-            return;
-        }
         let entry = self.pizzamat_traffic(
             &request,
             if self.options.dry_run {
@@ -166,8 +160,8 @@ impl App {
         TrafficEntry {
             at: now_hms(),
             direction,
-            transport: "mqtt",
-            target: transport::command_topic(request, self.options.pizzamat.debug),
+            transport: "amqp",
+            target: request.command(self.options.pizzamat.debug),
             payload,
             note: Some(format!("user: {}", request.user)),
             sections: Section::Overview.bit() | Section::Pizzamat.bit(),

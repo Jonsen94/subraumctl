@@ -136,7 +136,7 @@ async fn pizzamat_dry_run_needs_no_broker_and_uses_configured_user() {
         "--pizzamat-user",
         "alice",
         "--pizzamat-debug",
-        "--broker",
+        "--pizzamat-amqp-url",
         "invalid://PRIVATE_SECRET@invalid",
         "mcp",
     ])

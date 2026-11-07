@@ -15,7 +15,7 @@ Allowed status fields still describe the space; set their groups to `x` if that
 information should not be shared.
 
 Pizzamat reads return the ordering service's text replies, including participant
-names and food choices. It uses the normal MQTT settings and a Pizzamat order identity;
+names and food choices. It uses a separate AMQP endpoint and Pizzamat order identity;
 see [Pizzamat setup and tools](pizzamat.md). `pizzamat = "x"` disables this group.
 
 Outlet control, Smoothiesaur, and raw publishing are disabled by default.
