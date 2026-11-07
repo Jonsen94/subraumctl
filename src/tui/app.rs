@@ -772,9 +772,16 @@ impl App {
     }
 
     fn handle_log_key(&mut self, key: KeyEvent) {
-        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-            self.show_log = false;
-            self.zone = FocusZone::Content;
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.show_log = false;
+                self.zone = FocusZone::Content;
+            }
+            KeyCode::Char('t') => {
+                tracing::warn!("test log line");
+                self.set_status("test log line emitted", StatusKind::Info);
+            }
+            _ => {}
         }
     }
 

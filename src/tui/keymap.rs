@@ -308,6 +308,10 @@ const APP_LOG: &[KeyBinding] = &[
         keys: "Ctrl+↑↓",
         action: "resize",
     },
+    KeyBinding {
+        keys: "t",
+        action: "test line",
+    },
 ];
 
 pub fn global_bindings() -> &'static [KeyBinding] {
