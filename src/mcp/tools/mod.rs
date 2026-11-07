@@ -3,6 +3,7 @@
 mod choice;
 mod controls;
 mod lighting;
+mod opt_in;
 
 use std::future::Future;
 use std::sync::Arc;
@@ -93,7 +94,8 @@ pub(super) fn register<B: super::backend::Backend>(
     backend: Arc<B>,
 ) -> Result<()> {
     lighting::register(server, backend.clone())?;
-    controls::register(server, backend)?;
+    controls::register(server, backend.clone())?;
+    opt_in::register(server, backend)?;
     add(
         server,
         "white_light_cells",

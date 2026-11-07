@@ -85,6 +85,7 @@ fn real_stdio_keeps_startup_warnings_off_the_protocol_stream() {
             "dmx",
             "knob_list",
             "knob_set",
+            "outlet",
             "system_telinit",
             "white_light_apply",
             "white_light_cells"

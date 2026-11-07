@@ -236,6 +236,85 @@ async fn control_writes_use_domain_commands_and_respect_read_only_groups() {
 }
 
 #[tokio::test]
+async fn opt_ins_are_disabled_by_default_and_publish_is_unfiltered_when_enabled() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        for enabled in [false, true] {
+            let config = if enabled {
+                toml::from_str("[tools]\npublish = 'w'\nsmoothiesaur = 'w'").unwrap()
+            } else {
+                Config::default()
+            };
+            let backend = Arc::new(RecordingBackend::default());
+            let mut server = McpServer::new(config);
+            tools::register(&mut server, backend.clone()).unwrap();
+            let (mut client, task) = start(server);
+            client.initialize().await;
+            let listed = client.request("tools/list", json!({})).await;
+            let names: Vec<_> = listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|tool| tool["name"].as_str().unwrap())
+                .collect();
+            assert!(!names.contains(&"subscribe"));
+            assert!(!names.contains(&"outlet"));
+            assert_eq!(names.contains(&"publish"), enabled);
+            for (name, arguments) in [
+                (
+                    "publish",
+                    json!({"topic": "edi/cmd/act", "payload": "unfiltered", "retain": true}),
+                ),
+                ("smoothiesaur_laser", json!({"power": 128})),
+                (
+                    "smoothiesaur_relay",
+                    json!({"relay": "pump-primary", "state": "on"}),
+                ),
+                ("smoothiesaur_zero", json!({})),
+            ] {
+                let response = client
+                    .request("tools/call", json!({"name": name, "arguments": arguments}))
+                    .await;
+                if enabled {
+                    assert_eq!(response["result"]["structuredContent"]["submitted"], true);
+                } else {
+                    assert_eq!(response["error"]["code"], -32601);
+                }
+            }
+            if enabled {
+                for (name, arguments) in [
+                    (
+                        "publish",
+                        json!({"topic": "any", "payload_file": "/etc/passwd"}),
+                    ),
+                    ("smoothiesaur_laser", json!({"power": 256})),
+                    (
+                        "smoothiesaur_laser",
+                        json!({"power": 1, "url": "http://elsewhere"}),
+                    ),
+                ] {
+                    let response = client
+                        .request("tools/call", json!({"name": name, "arguments": arguments}))
+                        .await;
+                    assert_eq!(response["result"]["isError"], true);
+                }
+                let commands = backend.0.lock().unwrap().clone();
+                assert_eq!(commands.len(), 4);
+                let publish = &commands[0].expand("").unwrap()[0];
+                assert_eq!(publish.target(), "edi/cmd/act");
+                assert_eq!(publish.payload(), "unfiltered");
+                assert!(publish.retain());
+            } else {
+                assert!(backend.0.lock().unwrap().is_empty());
+            }
+            drop(client);
+            task.await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn foundation_negotiates_lists_no_tools_and_rejects_calls() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let (mut client, server) = start(McpServer::new(Config::default()));
