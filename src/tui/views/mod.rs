@@ -1,9 +1,9 @@
 //! Section rendering.
 
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, ListState};
-use ratatui::Frame;
 
 use super::app::{App, Section};
 use crate::color::Theme;
@@ -33,9 +33,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 pub(crate) fn panel(title: impl Into<String>) -> Block<'static> {
-    Block::default()
-        .borders(Borders::ALL)
-        .title(title.into())
+    Block::default().borders(Borders::ALL).title(title.into())
 }
 
 pub(crate) fn selection_style(theme: &Theme) -> Style {

@@ -1,11 +1,11 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, LineGauge, List, ListItem, Paragraph};
-use ratatui::Frame;
 
-use crate::color::{color_to_hex, Theme, ThemeRole};
+use crate::color::{Theme, ThemeRole, color_to_hex};
 use crate::tui::app::{App, FocusZone};
 use crate::tui::theme::ColorPicker;
 
@@ -35,23 +35,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let list = List::new(items)
         .block(
-            panel("Theme roles").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Theme roles")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");
-    frame.render_stateful_widget(
-        list,
-        rows[0],
-        &mut list_state(Some(app.theme_view.focus)),
-    );
+    frame.render_stateful_widget(list, rows[0], &mut list_state(Some(app.theme_view.focus)));
 
     let hint = vec![
         Line::from("Enter opens the keyboard color picker for the selected role."),
         Line::from("x resets the role; X resets the whole theme after confirmation."),
-        Line::from("Changes apply live and can be reproduced with the CLI flags shown on the right."),
+        Line::from(
+            "Changes apply live and can be reproduced with the CLI flags shown on the right.",
+        ),
     ];
     frame.render_widget(Paragraph::new(hint), rows[1]);
 }
@@ -61,11 +57,7 @@ pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &
     frame.render_widget(Clear, area);
     let block = panel(format!("Color picker — {}", picker.role.title()))
         .border_style(Style::default().fg(theme.accent))
-        .style(
-            Style::default()
-                .bg(theme.background)
-                .fg(theme.foreground),
-        );
+        .style(Style::default().bg(theme.background).fg(theme.foreground));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -138,11 +130,7 @@ pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &
             } else {
                 symbols::line::NORMAL
             })
-            .filled_style(Style::default().fg(if selected {
-                theme.accent
-            } else {
-                theme.muted
-            }))
+            .filled_style(Style::default().fg(if selected { theme.accent } else { theme.muted }))
             .unfilled_style(Style::default().fg(theme.border));
         frame.render_widget(gauge, chunks[2 + index]);
     }

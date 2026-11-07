@@ -8,7 +8,7 @@ use clap::ValueEnum;
 use serde_json::json;
 use thiserror::Error;
 
-use crate::knob::{format_value, Knob};
+use crate::knob::{Knob, format_value};
 use crate::white_light;
 
 pub const TOPIC_DMX: &str = "edi/cmd/dmx";
@@ -589,7 +589,11 @@ impl ControlCommand {
                 format!("white light w={warm} c={cold} for {} cell(s)", cells.len())
             }
             Self::Outlet { outlet, on } => {
-                format!("outlet {} {}", outlet.label(), if *on { "on" } else { "off" })
+                format!(
+                    "outlet {} {}",
+                    outlet.label(),
+                    if *on { "on" } else { "off" }
+                )
             }
             Self::Radiation { target } => format!("radiation emitter {}", target.label()),
             Self::Sob { sound } => format!("sob sound {}", sound.label()),
@@ -794,7 +798,10 @@ mod tests {
     #[test]
     fn all_smoothie_commands_are_known() {
         for relay in SmoothieRelay::ALL {
-            assert_eq!(SmoothieRelay::from_topic_name(relay.topic_name()), Some(relay));
+            assert_eq!(
+                SmoothieRelay::from_topic_name(relay.topic_name()),
+                Some(relay)
+            );
             assert!(relay.on_command().starts_with("M771I15P"));
             assert!(relay.off_command().starts_with("M771I15P"));
         }

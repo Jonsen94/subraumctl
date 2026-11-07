@@ -142,7 +142,12 @@ impl TrafficEntry {
 
     pub fn detail(&self) -> String {
         let mut lines = vec![
-            format!("{}  {}  {}", self.at, self.direction.label(), self.transport),
+            format!(
+                "{}  {}  {}",
+                self.at,
+                self.direction.label(),
+                self.transport
+            ),
             format!("target: {}", self.target),
             format!("payload: {}", self.payload),
         ];
@@ -216,9 +221,7 @@ pub fn sections_for_topic(topic: &str) -> u16 {
         mask |= Section::Alerts.bit();
     } else if topic == TOPIC_TELINIT {
         mask |= Section::System.bit();
-    } else if topic.starts_with(TOPIC_KNOB_GET_PREFIX)
-        || topic.starts_with(TOPIC_KNOB_SET_PREFIX)
-    {
+    } else if topic.starts_with(TOPIC_KNOB_GET_PREFIX) || topic.starts_with(TOPIC_KNOB_SET_PREFIX) {
         mask |= Section::Animation.bit();
     } else if topic.starts_with(TOPIC_SMOOTHIE_PREFIX) {
         mask |= Section::Smoothie.bit();

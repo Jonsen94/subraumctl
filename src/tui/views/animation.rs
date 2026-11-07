@@ -1,10 +1,10 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
-use ratatui::Frame;
 
-use crate::knob::{format_value, KNOB_SPECS};
+use crate::knob::{KNOB_SPECS, format_value};
 use crate::tui::app::{App, FocusZone};
 
 use super::{focused_border, list_state, panel, selection_style};
@@ -78,10 +78,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let list = List::new(items)
         .block(
-            panel("Animation knobs").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Animation knobs")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");

@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Gauge, Paragraph, Row, Table, TableState};
-use ratatui::Frame;
 
 use crate::action::SmoothieRelay;
 use crate::smoothiesaur::TEMP_TOPICS;
@@ -80,12 +80,10 @@ fn draw_relays(frame: &mut Frame, area: Rect, app: &App) {
         ],
     )
     .header(header)
-    .block(
-        panel("Relays").border_style(focused_border(
-            &app.theme,
-            app.zone == FocusZone::Content && app.smoothie.focus < 7,
-        )),
-    )
+    .block(panel("Relays").border_style(focused_border(
+        &app.theme,
+        app.zone == FocusZone::Content && app.smoothie.focus < 7,
+    )))
     .row_highlight_style(selection_style(&app.theme));
     let mut state = TableState::default();
     state.select(selected);
@@ -98,12 +96,10 @@ fn draw_laser(frame: &mut Frame, area: Rect, app: &App) {
         .constraints([Constraint::Length(3), Constraint::Min(2)])
         .split(area);
     let gauge = Gauge::default()
-        .block(
-            panel("Laser power").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content && app.smoothie.focus == 7,
-            )),
-        )
+        .block(panel("Laser power").border_style(focused_border(
+            &app.theme,
+            app.zone == FocusZone::Content && app.smoothie.focus == 7,
+        )))
         .gauge_style(Style::default().fg(app.theme.accent))
         .ratio(app.smoothie.laser as f64 / 255.0)
         .label(format!("{}/255", app.smoothie.laser));
@@ -163,10 +159,8 @@ fn draw_temperatures(frame: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
     frame.render_widget(
-        Paragraph::new(lines).block(panel("Temperatures").border_style(focused_border(
-            &app.theme,
-            false,
-        ))),
+        Paragraph::new(lines)
+            .block(panel("Temperatures").border_style(focused_border(&app.theme, false))),
         area,
     );
 }
@@ -186,17 +180,12 @@ fn draw_flow_and_laser(frame: &mut Frame, area: Rect, app: &App) {
         )),
         Line::from(format!(
             "last HTTP: {}",
-            app.smoothie
-                .last_http
-                .as_deref()
-                .unwrap_or("(none)")
+            app.smoothie.last_http.as_deref().unwrap_or("(none)")
         )),
     ];
     frame.render_widget(
-        Paragraph::new(lines).block(panel("Flow / laser").border_style(focused_border(
-            &app.theme,
-            false,
-        ))),
+        Paragraph::new(lines)
+            .block(panel("Flow / laser").border_style(focused_border(&app.theme, false))),
         area,
     );
 }
@@ -208,11 +197,7 @@ fn draw_safety(frame: &mut Frame, area: Rect, app: &App) {
     for chunk in bits.chunks(2) {
         let mut cells = Vec::new();
         for (_, label, on) in chunk {
-            let state = if known {
-                status_text(Some(*on))
-            } else {
-                "?"
-            };
+            let state = if known { status_text(Some(*on)) } else { "?" };
             cells.push(Cell::from(format!("{}: {state}", **label)));
         }
         while cells.len() < 2 {

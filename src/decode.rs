@@ -29,21 +29,13 @@ pub fn laser_control_8(payload: &str) -> Option<f64> {
 }
 
 pub fn laser_control_16(payload: &str) -> Option<f64> {
-    let raw = payload
-        .split_whitespace()
-        .nth(1)?
-        .parse::<f64>()
-        .ok()?;
+    let raw = payload.split_whitespace().nth(1)?.parse::<f64>().ok()?;
     Some(raw * 100.0 / 65535.0)
 }
 
 /// Returns `(percent_of_2_7_v, volts)` for the third laser-power value.
 pub fn laser_voltage(payload: &str) -> Option<(f64, f64)> {
-    let raw = payload
-        .split_whitespace()
-        .nth(2)?
-        .parse::<f64>()
-        .ok()?;
+    let raw = payload.split_whitespace().nth(2)?.parse::<f64>().ok()?;
     let volts = (raw + 200.0) * 6.430107526881721e-05;
     Some((volts / 2.7 * 100.0, volts))
 }

@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
-use ratatui::Frame;
 
 use crate::tui::app::{App, FocusZone};
 
@@ -32,9 +32,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Line::from(format!("dim: {}", app.alert.dim)),
     ];
     frame.render_widget(
-        Paragraph::new(alert_lines).block(
-            panel("Alert LED").border_style(focused_border(&app.theme, false)),
-        ),
+        Paragraph::new(alert_lines)
+            .block(panel("Alert LED").border_style(focused_border(&app.theme, false))),
         rows[0],
     );
 
@@ -44,10 +43,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let list = List::new(items)
         .block(
-            panel("Alert actions").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Alert actions")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");

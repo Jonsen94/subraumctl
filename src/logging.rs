@@ -6,7 +6,7 @@
 
 use eyre::Result;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::{filter::LevelFilter, EnvFilter};
+use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
 pub fn init_cli(verbose: u8, quiet: bool) {
     let level = if quiet {

@@ -15,11 +15,11 @@ use std::time::Duration;
 use crossterm::cursor::{Hide, Show};
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use eyre::Result;
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use tokio::sync::mpsc;
 use tokio::time::interval;
 

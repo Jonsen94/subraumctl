@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Cell, Row, Table, TableState};
-use ratatui::Frame;
 
 use crate::action::Outlet;
 use crate::tui::app::{App, FocusZone};
@@ -58,10 +58,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     )
     .header(header)
     .block(
-        panel("Outlets").border_style(focused_border(
-            &app.theme,
-            app.zone == FocusZone::Content,
-        )),
+        panel("Outlets").border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
     )
     .row_highlight_style(selection_style(&app.theme));
 

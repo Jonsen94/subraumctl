@@ -236,10 +236,8 @@ fn normalize_color(input: &str) -> String {
         return format!("rgb({trimmed})");
     }
 
-    let looks_like_hex = trimmed
-        .chars()
-        .all(|ch| ch.is_ascii_hexdigit())
-        && matches!(trimmed.len(), 3 | 4 | 6 | 8);
+    let looks_like_hex =
+        trimmed.chars().all(|ch| ch.is_ascii_hexdigit()) && matches!(trimmed.len(), 3 | 4 | 6 | 8);
     if looks_like_hex {
         return format!("#{trimmed}");
     }
@@ -289,7 +287,11 @@ pub fn rgb_to_hsv(red: u8, green: u8, blue: u8) -> (f64, f64, f64) {
         60.0 * ((r - g) / delta + 4.0)
     };
     let hue = if hue < 0.0 { hue + 360.0 } else { hue };
-    let saturation = if max.abs() < f64::EPSILON { 0.0 } else { delta / max };
+    let saturation = if max.abs() < f64::EPSILON {
+        0.0
+    } else {
+        delta / max
+    };
     (hue, saturation, max)
 }
 
@@ -380,7 +382,10 @@ mod tests {
             parse_color("0,128,128").unwrap().color,
             Color::Rgb(0, 128, 128)
         );
-        assert_eq!(parse_color("00aaff").unwrap().color, Color::Rgb(0, 170, 255));
+        assert_eq!(
+            parse_color("00aaff").unwrap().color,
+            Color::Rgb(0, 170, 255)
+        );
         assert_eq!(parse_color("teal").unwrap().color, Color::Rgb(0, 128, 128));
     }
 

@@ -5,27 +5,25 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::style::Color;
 use throbber_widgets_tui::ThrobberState;
+use tokio::sync::mpsc::UnboundedSender;
 use tui_input::Input;
 use tui_logger::TuiWidgetState;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::{
-    Action, ControlCommand, DmxAnimation, DmxGroup, Outlet, RadiationTarget, SmoothieRelay, SobSound,
-    Transport, TOPIC_ALERT_CONDITION, TOPIC_KNOB_GET_PREFIX, TOPIC_KNOB_SET_PREFIX,
-    TOPIC_SMOOTHIE_PREFIX, TOPIC_WHITE_LIGHT_STATUS_PREFIX,
+    Action, ControlCommand, DmxAnimation, DmxGroup, Outlet, RadiationTarget, SmoothieRelay,
+    SobSound, TOPIC_ALERT_CONDITION, TOPIC_KNOB_GET_PREFIX, TOPIC_KNOB_SET_PREFIX,
+    TOPIC_SMOOTHIE_PREFIX, TOPIC_WHITE_LIGHT_STATUS_PREFIX, Transport,
 };
 use crate::cli::TuiView;
 use crate::color::{Theme, ThemePreset, ThemeRole};
-use crate::decode::{parse_alert, parse_bool, AlertCondition, AlertState};
-use crate::knob::{format_value, Knob, KNOB_SPECS};
+use crate::decode::{AlertCondition, AlertState, parse_alert, parse_bool};
+use crate::knob::{KNOB_SPECS, Knob, format_value};
 use crate::mqtt::{MqttCommand, MqttEvent};
 use crate::smoothiesaur::{HttpCommand, HttpEvent, SmoothieStatus};
+use crate::tui::TuiOptions;
 use crate::tui::safe_mode::{ConfirmChoice, PendingCommand};
 use crate::tui::theme::{ColorPicker, PickerOutcome};
-use crate::tui::traffic::{
-    sections_for_action, TrafficDirection, TrafficEntry, TrafficLog,
-};
-use crate::tui::TuiOptions;
+use crate::tui::traffic::{TrafficDirection, TrafficEntry, TrafficLog, sections_for_action};
 use crate::white_light;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -248,23 +246,11 @@ pub struct ThemeViewState {
 }
 
 pub enum TextInputMode {
-    Search {
-        section: Section,
-        input: Input,
-    },
-    ExactKnob {
-        knob: Knob,
-        input: Input,
-    },
-    ExactWarm {
-        input: Input,
-    },
-    ExactCold {
-        input: Input,
-    },
-    ExactLaser {
-        input: Input,
-    },
+    Search { section: Section, input: Input },
+    ExactKnob { knob: Knob, input: Input },
+    ExactWarm { input: Input },
+    ExactCold { input: Input },
+    ExactLaser { input: Input },
 }
 
 pub struct TextInputState {
@@ -818,12 +804,15 @@ impl App {
                 });
             }
             KeyCode::PageUp => {
-                self.traffic_selected =
-                    Some(self.traffic_selected.unwrap_or(len).saturating_sub(5).min(len - 1));
+                self.traffic_selected = Some(
+                    self.traffic_selected
+                        .unwrap_or(len)
+                        .saturating_sub(5)
+                        .min(len - 1),
+                );
             }
             KeyCode::PageDown => {
-                self.traffic_selected =
-                    Some((self.traffic_selected.unwrap_or(0) + 5).min(len - 1));
+                self.traffic_selected = Some((self.traffic_selected.unwrap_or(0) + 5).min(len - 1));
             }
             KeyCode::Char('g') => {
                 self.traffic_selected = Some(0);
@@ -916,13 +905,11 @@ impl App {
                 }
             }
             KeyCode::Left => {
-                self.lighting.animation =
-                    (self.lighting.animation + DmxAnimation::ALL.len() - 1)
-                        % DmxAnimation::ALL.len();
+                self.lighting.animation = (self.lighting.animation + DmxAnimation::ALL.len() - 1)
+                    % DmxAnimation::ALL.len();
             }
             KeyCode::Right => {
-                self.lighting.animation =
-                    (self.lighting.animation + 1) % DmxAnimation::ALL.len();
+                self.lighting.animation = (self.lighting.animation + 1) % DmxAnimation::ALL.len();
             }
             KeyCode::Enter => {
                 if visible.is_empty() {
@@ -945,20 +932,20 @@ impl App {
             KeyCode::Down => {
                 self.white_light.focus = next_in(&items, self.white_light.focus, true);
             }
-            KeyCode::Left => self.adjust_white_light(
-                if key.modifiers.contains(KeyModifiers::SHIFT) {
+            KeyCode::Left => {
+                self.adjust_white_light(if key.modifiers.contains(KeyModifiers::SHIFT) {
                     -16
                 } else {
                     -1
-                },
-            ),
-            KeyCode::Right => self.adjust_white_light(
-                if key.modifiers.contains(KeyModifiers::SHIFT) {
+                })
+            }
+            KeyCode::Right => {
+                self.adjust_white_light(if key.modifiers.contains(KeyModifiers::SHIFT) {
                     16
                 } else {
                     1
-                },
-            ),
+                })
+            }
             KeyCode::Home => self.set_white_light_bound(false),
             KeyCode::End => self.set_white_light_bound(true),
             KeyCode::Char('a') => self.white_light.selected = [true; 15],
@@ -1074,11 +1061,7 @@ impl App {
     fn handle_alerts_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up => {
-                self.alerts.focus = self
-                    .alerts
-                    .focus
-                    .checked_sub(1)
-                    .unwrap_or(5);
+                self.alerts.focus = self.alerts.focus.checked_sub(1).unwrap_or(5);
             }
             KeyCode::Down => {
                 self.alerts.focus = (self.alerts.focus + 1) % 6;
@@ -1189,9 +1172,7 @@ impl App {
                 self.animation.dirty[index] = false;
             }
             KeyCode::Char('/') => self.start_search(),
-            KeyCode::Char(ch)
-                if ch.is_ascii_digit() || ch == '-' || ch == '.' =>
-            {
+            KeyCode::Char(ch) if ch.is_ascii_digit() || ch == '-' || ch == '.' => {
                 self.start_exact_knob(self.animation.focus, key);
             }
             _ => {}
@@ -1430,7 +1411,11 @@ impl App {
         self.animation.values[index] = Some(value);
         self.animation.dirty[index] = true;
         self.set_status(
-            format!("knob {} = {} (Enter to send)", knob.name(), format_value(value)),
+            format!(
+                "knob {} = {} (Enter to send)",
+                knob.name(),
+                format_value(value)
+            ),
             StatusKind::Info,
         );
     }
@@ -1715,10 +1700,7 @@ impl App {
                     retry_at: Instant::now() + delay,
                 };
                 self.set_status(
-                    format!(
-                        "reconnecting in {}s (attempt {attempt})",
-                        delay.as_secs()
-                    ),
+                    format!("reconnecting in {}s (attempt {attempt})", delay.as_secs()),
                     StatusKind::Info,
                 );
             }
@@ -1817,9 +1799,7 @@ impl App {
         }
 
         if topic.starts_with(TOPIC_SMOOTHIE_PREFIX) {
-            self.smoothie
-                .status
-                .apply(topic, payload, Instant::now());
+            self.smoothie.status.apply(topic, payload, Instant::now());
         }
 
         tracing::debug!("mqtt message {topic}: {payload}");
@@ -1831,8 +1811,7 @@ impl App {
             Ok(()) => {
                 self.smoothie.http_error = None;
                 self.smoothie.last_http = Some(event.description);
-                self.traffic
-                    .push(TrafficEntry::http(&url, &event.body));
+                self.traffic.push(TrafficEntry::http(&url, &event.body));
                 self.set_status("smoothiesaur command sent", StatusKind::Success);
                 tracing::info!("smoothiesaur command sent: {}", event.body.trim_end());
             }
@@ -1852,8 +1831,7 @@ impl App {
             .status
             .as_ref()
             .map(|status| {
-                status.kind != StatusKind::Error
-                    && status.at.elapsed() > Duration::from_secs(12)
+                status.kind != StatusKind::Error && status.at.elapsed() > Duration::from_secs(12)
             })
             .unwrap_or(false);
         if clear_status {
@@ -1880,9 +1858,9 @@ impl App {
             AlertCondition::Blue => Color::Blue,
             AlertCondition::Contact => self.theme.warning,
             AlertCondition::Offworld => self.theme.alert,
-            AlertCondition::Intruder
-            | AlertCondition::Red
-            | AlertCondition::SelfDestruct => self.theme.error,
+            AlertCondition::Intruder | AlertCondition::Red | AlertCondition::SelfDestruct => {
+                self.theme.error
+            }
             AlertCondition::Biohazard => self.theme.alert,
             AlertCondition::Unknown => self.theme.muted,
         }
@@ -1919,10 +1897,7 @@ fn move_in_list(list: &[usize], current: usize, delta: isize) -> usize {
     if list.is_empty() {
         return current;
     }
-    let position = list
-        .iter()
-        .position(|item| *item == current)
-        .unwrap_or(0) as isize;
+    let position = list.iter().position(|item| *item == current).unwrap_or(0) as isize;
     let next = (position + delta).clamp(0, list.len() as isize - 1) as usize;
     list[next]
 }

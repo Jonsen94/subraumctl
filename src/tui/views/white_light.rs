@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Gauge, Paragraph, Row, Table, TableState};
-use ratatui::Frame;
 
 use crate::tui::app::{App, FocusZone};
 use crate::white_light;
@@ -24,24 +24,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .split(rows[0]);
 
     let warm = Gauge::default()
-        .block(
-            panel("warm").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content && app.white_light.focus == 0,
-            )),
-        )
+        .block(panel("warm").border_style(focused_border(
+            &app.theme,
+            app.zone == FocusZone::Content && app.white_light.focus == 0,
+        )))
         .gauge_style(Style::default().fg(app.theme.accent))
         .ratio(app.white_light.warm as f64 / 255.0)
         .label(format!("{}", app.white_light.warm));
     frame.render_widget(warm, gauges[0]);
 
     let cold = Gauge::default()
-        .block(
-            panel("cold").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content && app.white_light.focus == 1,
-            )),
-        )
+        .block(panel("cold").border_style(focused_border(
+            &app.theme,
+            app.zone == FocusZone::Content && app.white_light.focus == 1,
+        )))
         .gauge_style(Style::default().fg(app.theme.accent))
         .ratio(app.white_light.cold as f64 / 255.0)
         .label(format!("{}", app.white_light.cold));
@@ -122,10 +118,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 app.white_light.filter
             )
         })
-        .border_style(focused_border(
-            &app.theme,
-            app.zone == FocusZone::Content,
-        )),
+        .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
     )
     .row_highlight_style(selection_style(&app.theme));
 

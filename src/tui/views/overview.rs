@@ -1,10 +1,10 @@
 use std::time::Instant;
 
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
-use ratatui::Frame;
 
 use super::super::app::{App, FocusZone, Section};
 use super::{focused_border, list_state, panel, selection_style};
@@ -46,10 +46,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
     frame.render_widget(
         Paragraph::new(connection).block(
-            panel("Connection").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Connection")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         ),
         top[0],
     );
@@ -63,10 +61,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Line::from("topic: heimdallr/alert/condition"),
     ];
     frame.render_widget(
-        Paragraph::new(alert).block(panel("Alert").border_style(focused_border(
-            &app.theme,
-            false,
-        ))),
+        Paragraph::new(alert).block(panel("Alert").border_style(focused_border(&app.theme, false))),
         top[1],
     );
 
@@ -78,9 +73,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let safe_lines = vec![
         Line::from(vec![Span::styled(
             if app.safe_mode { "SAFE" } else { "UNSAFE" },
-            Style::default()
-                .fg(safe_color)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(safe_color).add_modifier(Modifier::BOLD),
         )]),
         Line::from("S toggles safe mode"),
         Line::from(if app.safe_mode {
@@ -90,10 +83,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }),
     ];
     frame.render_widget(
-        Paragraph::new(safe_lines).block(panel("Safe mode").border_style(focused_border(
-            &app.theme,
-            false,
-        ))),
+        Paragraph::new(safe_lines)
+            .block(panel("Safe mode").border_style(focused_border(&app.theme, false))),
         middle[0],
     );
 
@@ -105,13 +96,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let activity = vec![
         Line::from(status),
         Line::from(format!("traffic entries: {}", app.traffic.len())),
-        Line::from(format!("safe mode: {}", if app.safe_mode { "on" } else { "off" })),
+        Line::from(format!(
+            "safe mode: {}",
+            if app.safe_mode { "on" } else { "off" }
+        )),
     ];
     frame.render_widget(
-        Paragraph::new(activity).block(panel("Last activity").border_style(focused_border(
-            &app.theme,
-            false,
-        ))),
+        Paragraph::new(activity)
+            .block(panel("Last activity").border_style(focused_border(&app.theme, false))),
         middle[1],
     );
 
@@ -129,18 +121,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let list = List::new(items)
         .block(
-            panel("Sections").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Sections")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");
-    frame.render_stateful_widget(
-        list,
-        rows[2],
-        &mut list_state(Some(app.overview.focus)),
-    );
+    frame.render_stateful_widget(list, rows[2], &mut list_state(Some(app.overview.focus)));
 }
 
 fn description(section: Section) -> &'static str {

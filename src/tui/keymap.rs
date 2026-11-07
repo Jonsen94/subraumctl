@@ -382,10 +382,7 @@ fn push_bindings(text: &mut String, title: &str, bindings: &[KeyBinding]) {
     text.push_str(title);
     text.push('\n');
     for binding in bindings {
-        text.push_str(&format!(
-            "  {:<18} {}\n",
-            binding.keys, binding.action
-        ));
+        text.push_str(&format!("  {:<18} {}\n", binding.keys, binding.action));
     }
     text.push('\n');
 }

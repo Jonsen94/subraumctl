@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::action::SmoothieRelay;
 use crate::decode::{
-    laser_readouts, parse_bool, temperature_celsius, FlowEstimator, LaserReadouts,
+    FlowEstimator, LaserReadouts, laser_readouts, parse_bool, temperature_celsius,
 };
 
 pub const DEFAULT_SMOOTHIE_URL: &str = "http://172.31.64.137/command";
@@ -16,8 +16,14 @@ pub const SAFETY_TOPIC: &str = "smoothie/safetyLoop";
 pub const LASER_TOPIC: &str = "smoothie/laserpower";
 
 pub const TEMP_TOPICS: [(&str, &str); 5] = [
-    ("smoothie/mexicanTemp/relayControl", "mexican: relay control"),
-    ("smoothie/mexicanTemp/coolantSensors", "mexican: coolant sensor"),
+    (
+        "smoothie/mexicanTemp/relayControl",
+        "mexican: relay control",
+    ),
+    (
+        "smoothie/mexicanTemp/coolantSensors",
+        "mexican: coolant sensor",
+    ),
     ("smoothie/coolant/reservoir", "reservoir: body"),
     ("smoothie/coolant/primary", "reservoir: primary"),
     ("smoothie/coolant/secondary", "reservoir: secondary"),
@@ -186,28 +192,16 @@ mod tests {
     #[test]
     fn relay_status_is_decoded() {
         let mut status = SmoothieStatus::default();
-        status.apply(
-            "smoothie/relays/pumpPrimary",
-            "on",
-            Instant::now(),
-        );
+        status.apply("smoothie/relays/pumpPrimary", "on", Instant::now());
         assert_eq!(status.relay(SmoothieRelay::PumpPrimary), Some(true));
-        status.apply(
-            "smoothie/relays/fanPort",
-            "0",
-            Instant::now(),
-        );
+        status.apply("smoothie/relays/fanPort", "0", Instant::now());
         assert_eq!(status.relay(SmoothieRelay::FanPort), Some(false));
     }
 
     #[test]
     fn temperatures_and_safety_are_decoded() {
         let mut status = SmoothieStatus::default();
-        status.apply(
-            "smoothie/coolant/reservoir",
-            "296.3",
-            Instant::now(),
-        );
+        status.apply("smoothie/coolant/reservoir", "296.3", Instant::now());
         assert!((status.temps[2].unwrap() - 23.15).abs() < 1e-9);
         status.apply(SAFETY_TOPIC, "8", Instant::now());
         assert_eq!(status.safety, Some(8));

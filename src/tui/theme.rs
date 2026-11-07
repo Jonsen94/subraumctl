@@ -4,7 +4,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::Color;
 use tui_input::Input;
 
-use crate::color::{color_to_hex, hsl_to_rgb, hsv_to_rgb, rgb_to_hsl, rgb_to_hsv, ThemeRole};
+use crate::color::{ThemeRole, color_to_hex, hsl_to_rgb, hsv_to_rgb, rgb_to_hsl, rgb_to_hsv};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ColorMode {
@@ -314,9 +314,7 @@ impl ColorPicker {
             }
             KeyCode::Enter => PickerOutcome::Apply,
             KeyCode::Esc => PickerOutcome::Cancel,
-            KeyCode::Char(ch)
-                if ch.is_ascii_digit() || ch == '-' || ch == '.' =>
-            {
+            KeyCode::Char(ch) if ch.is_ascii_digit() || ch == '-' || ch == '.' => {
                 let mut input = Input::default();
                 input.handle_event(&Event::Key(key));
                 self.input = Some(input);

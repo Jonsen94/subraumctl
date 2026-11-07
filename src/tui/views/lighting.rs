@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
-use ratatui::Frame;
 
 use crate::action::{ControlCommand, DmxAnimation, DmxGroup};
 use crate::tui::app::{App, FocusZone};
@@ -41,10 +41,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             .collect();
         let list = List::new(items)
             .block(
-                panel(group_title).border_style(focused_border(
-                    &app.theme,
-                    app.zone == FocusZone::Content,
-                )),
+                panel(group_title)
+                    .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
             )
             .highlight_style(selection_style(&app.theme))
             .highlight_symbol("> ");
@@ -57,10 +55,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let animation_list = List::new(animation_items)
         .block(
-            panel("Animations").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("Animations")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");

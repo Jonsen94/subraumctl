@@ -2,19 +2,17 @@
 
 use std::time::Instant;
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
-use ratatui::Frame;
 use throbber_widgets_tui::Throbber;
 use tui_logger::TuiLoggerSmartWidget;
 
 use crate::color::Theme;
 
-use super::app::{
-    App, FocusZone, Popup, Section, StatusKind, TextInputMode, TextInputState,
-};
+use super::app::{App, FocusZone, Popup, Section, StatusKind, TextInputMode, TextInputState};
 use super::keymap::{self, KeyBinding};
 use super::safe_mode::ConfirmChoice;
 use super::views::{self, selection_style, truncate};
@@ -110,10 +108,7 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &mut App) {
         Span::styled(connection, Style::default().fg(app.connection_color())),
         Span::raw("  alert: "),
         Span::styled("● ", Style::default().fg(app.alert_color())),
-        Span::styled(
-            app.alert_label(),
-            Style::default().fg(app.alert_color()),
-        ),
+        Span::styled(app.alert_label(), Style::default().fg(app.alert_color())),
         Span::raw("  "),
     ];
     if app.safe_mode {
@@ -146,7 +141,8 @@ fn draw_sidebar(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let list = List::new(items)
         .block(
-            Block::default().borders(Borders::ALL)
+            Block::default()
+                .borders(Borders::ALL)
                 .title("Sections")
                 .border_style(Style::default().fg(if app.zone == FocusZone::Sidebar {
                     app.theme.accent
@@ -192,7 +188,8 @@ fn draw_content(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_traffic(frame: &mut Frame, area: Rect, app: &App) {
     let entries = app.traffic.filtered(app.section);
-    let block = Block::default().borders(Borders::ALL)
+    let block = Block::default()
+        .borders(Borders::ALL)
         .title(format!(
             "Traffic — {} ({})",
             app.section.title(),
@@ -260,7 +257,8 @@ fn draw_traffic(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_app_log(frame: &mut Frame, area: Rect, app: &mut App) {
-    let block = Block::default().borders(Borders::ALL)
+    let block = Block::default()
+        .borders(Borders::ALL)
         .title("Application log (Ctrl+L)")
         .border_style(Style::default().fg(if app.zone == FocusZone::AppLog {
             app.theme.accent
@@ -269,11 +267,7 @@ fn draw_app_log(frame: &mut Frame, area: Rect, app: &mut App) {
         }));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    frame.render_stateful_widget(
-        TuiLoggerSmartWidget::default(),
-        inner,
-        &mut app.log_state,
-    );
+    frame.render_stateful_widget(TuiLoggerSmartWidget::default(), inner, &mut app.log_state);
 }
 
 fn draw_status(frame: &mut Frame, area: Rect, app: &App) {
@@ -397,15 +391,7 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
                 .lines()
                 .map(|line| Line::from(line.to_string()))
                 .collect::<Vec<Line<'static>>>();
-            render_popup(
-                frame,
-                area,
-                "Message detail",
-                lines,
-                72,
-                48,
-                &app.theme,
-            );
+            render_popup(frame, area, "Message detail", lines, 72, 48, &app.theme);
         }
         Popup::ColorPicker { picker } => {
             views::theme::draw_picker(frame, centered_rect(75, 80, area), picker, &app.theme);
@@ -503,17 +489,10 @@ fn render_popup(
         .borders(Borders::ALL)
         .title(title.to_string())
         .border_style(Style::default().fg(theme.accent))
-        .style(
-            Style::default()
-                .bg(theme.background)
-                .fg(theme.foreground),
-        );
+        .style(Style::default().bg(theme.background).fg(theme.foreground));
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
-    frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }),
-        inner,
-    );
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {

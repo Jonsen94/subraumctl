@@ -1,8 +1,8 @@
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, Paragraph};
-use ratatui::Frame;
 
 use crate::tui::app::{App, FocusZone};
 
@@ -23,9 +23,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Line::from("Safe mode asks for confirmation before sending."),
     ];
     frame.render_widget(
-        Paragraph::new(warning).block(
-            panel("Warning").border_style(focused_border(&app.theme, false)),
-        ),
+        Paragraph::new(warning)
+            .block(panel("Warning").border_style(focused_border(&app.theme, false))),
         rows[0],
     );
 
@@ -41,10 +40,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
     let list = List::new(items)
         .block(
-            panel("telinit").border_style(focused_border(
-                &app.theme,
-                app.zone == FocusZone::Content,
-            )),
+            panel("telinit")
+                .border_style(focused_border(&app.theme, app.zone == FocusZone::Content)),
         )
         .highlight_style(selection_style(&app.theme))
         .highlight_symbol("> ");

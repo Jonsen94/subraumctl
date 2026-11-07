@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use paho_mqtt as paho;
 use thiserror::Error;
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use crate::action::TOPIC_ALERT_CONDITION;
 

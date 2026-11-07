@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use clap::CommandFactory;
-use eyre::{eyre, Result, WrapErr};
+use eyre::{Result, WrapErr, eyre};
 
 use crate::action::{
     Action, ControlCommand, SmoothieRelay, TOPIC_ALERT_CONDITION, TOPIC_KNOB_GET_PREFIX,
@@ -17,13 +17,13 @@ use crate::cli::{
     MonitorKind, PublishArgs, SmoothieCommand, SubscribeArgs, SystemCommand, TuiArgs,
     WhiteLightCommand,
 };
-use crate::color::{parse_color, Theme, ThemeRole};
+use crate::color::{Theme, ThemeRole, parse_color};
 use crate::decode::{parse_alert, parse_bool};
-use crate::knob::{format_value, Knob, KNOB_SPECS};
+use crate::knob::{KNOB_SPECS, Knob, format_value};
 use crate::mqtt::{self, MqttOptions};
 use crate::output;
 use crate::smoothiesaur::{
-    SmoothieStatus, FLOW_TOPIC, LASER_TOPIC, RELAY_TOPIC_PREFIX, SAFETY_TOPIC, TEMP_TOPICS,
+    FLOW_TOPIC, LASER_TOPIC, RELAY_TOPIC_PREFIX, SAFETY_TOPIC, SmoothieStatus, TEMP_TOPICS,
 };
 use crate::tui::{self, TuiOptions};
 use crate::white_light;
@@ -78,13 +78,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         },
         CliCommand::System(args) => match args.command {
             SystemCommand::Telinit { state } => {
-                execute_command(
-                    &global,
-                    &ControlCommand::Telinit {
-                        on: state.is_on(),
-                    },
-                )
-                .await
+                execute_command(&global, &ControlCommand::Telinit { on: state.is_on() }).await
             }
         },
         CliCommand::Knob(args) => match args.command {
@@ -178,7 +172,8 @@ async fn execute_command(global: &GlobalArgs, command: &ControlCommand) -> Resul
             for (topic, payload, retain) in mqtt_actions {
                 match mqtt::publish(&client, &topic, &payload, retain) {
                     Ok(()) => {
-                        if let Err(err) = output::print_published(&topic, &payload, retain, json, quiet)
+                        if let Err(err) =
+                            output::print_published(&topic, &payload, retain, json, quiet)
                         {
                             result = Err(err);
                             break;
@@ -457,12 +452,7 @@ fn alert_led(global: &GlobalArgs, watch: bool) -> Result<()> {
         })
         .await??;
     } else {
-        let messages = collect_messages(
-            &options,
-            &[topic],
-            wait_deadline(global.wait),
-            Some(1),
-        )?;
+        let messages = collect_messages(&options, &[topic], wait_deadline(global.wait), Some(1))?;
         if let Some((topic, payload)) = messages.first() {
             let state = parse_alert(payload);
             output::print_decoded(
@@ -498,18 +488,12 @@ fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
                     .strip_prefix(TOPIC_WHITE_LIGHT_STATUS_PREFIX)
                     .unwrap_or(topic);
                 let state = if parse_bool(payload) { "on" } else { "off" };
-                output::print_decoded(
-                    topic,
-                    &format!("white-light {id} = {state}"),
-                    json,
-                    quiet,
-                )
+                output::print_decoded(topic, &format!("white-light {id} = {state}"), json, quiet)
             })
         })
         .await??;
     } else {
-        let messages =
-            collect_messages(&options, &[topic], wait_deadline(global.wait), None)?;
+        let messages = collect_messages(&options, &[topic], wait_deadline(global.wait), None)?;
         let mut states: HashMap<String, String> = HashMap::new();
         for (topic, payload) in messages {
             let id = topic
@@ -520,9 +504,7 @@ fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
             states.insert(id, state.to_string());
         }
         for cell in white_light::CELLS {
-            let state = states
-                .remove(cell.id)
-                .unwrap_or_else(|| "?".to_string());
+            let state = states.remove(cell.id).unwrap_or_else(|| "?".to_string());
             output::print_decoded(
                 cell.id,
                 &format!("white-light {} = {state}", cell.id),
@@ -533,12 +515,7 @@ fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
         let mut extras: Vec<_> = states.into_iter().collect();
         extras.sort_by(|left, right| left.0.cmp(&right.0));
         for (id, state) in extras {
-            output::print_decoded(
-                &id,
-                &format!("white-light {id} = {state}"),
-                json,
-                quiet,
-            )?;
+            output::print_decoded(&id, &format!("white-light {id} = {state}"), json, quiet)?;
         }
     }
     Ok(())
@@ -566,8 +543,7 @@ fn smoothie_status(global: &GlobalArgs, watch: bool) -> Result<()> {
         })
         .await??;
     } else {
-        let messages =
-            collect_messages(&options, &[topic], wait_deadline(global.wait), None)?;
+        let messages = collect_messages(&options, &[topic], wait_deadline(global.wait), None)?;
         let mut status = SmoothieStatus::default();
         for (topic, payload) in &messages {
             status.apply(topic, payload, Instant::now());
@@ -654,12 +630,7 @@ fn print_smoothie_message(
             quiet,
         )
     } else {
-        output::print_decoded(
-            topic,
-            &format!("smoothie {topic} = {payload}"),
-            json,
-            quiet,
-        )
+        output::print_decoded(topic, &format!("smoothie {topic} = {payload}"), json, quiet)
     }
 }
 
@@ -773,12 +744,7 @@ fn monitor(global: &GlobalArgs, args: MonitorArgs) -> Result<()> {
                 )
             } else if let Some(id) = topic.strip_prefix(TOPIC_WHITE_LIGHT_STATUS_PREFIX) {
                 let state = if parse_bool(payload) { "on" } else { "off" };
-                output::print_decoded(
-                    topic,
-                    &format!("white-light {id} = {state}"),
-                    json,
-                    quiet,
-                )
+                output::print_decoded(topic, &format!("white-light {id} = {state}"), json, quiet)
             } else if topic == TOPIC_ALERT_CONDITION {
                 let state = parse_alert(payload);
                 output::print_decoded(
@@ -923,7 +889,12 @@ async fn run_tui(global: GlobalArgs, args: TuiArgs) -> Result<()> {
         &args.border_color,
         global.quiet,
     )?;
-    apply_theme_color(&mut theme, ThemeRole::Alert, &args.alert_color, global.quiet)?;
+    apply_theme_color(
+        &mut theme,
+        ThemeRole::Alert,
+        &args.alert_color,
+        global.quiet,
+    )?;
 
     let options = TuiOptions {
         mqtt: options_from_global(&global),
@@ -948,9 +919,7 @@ fn apply_theme_color(
     if let Some(value) = value {
         let parsed = parse_color(value)?;
         if parsed.alpha_ignored && !quiet {
-            eprintln!(
-                "warning: alpha channel in '{value}' is ignored (terminals have no alpha)"
-            );
+            eprintln!("warning: alpha channel in '{value}' is ignored (terminals have no alpha)");
         }
         theme.set(role, parsed.color);
     }

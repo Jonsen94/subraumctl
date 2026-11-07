@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::action::{DmxAnimation, DmxGroup, Outlet, RadiationTarget, SobSound, SmoothieRelay};
+use crate::action::{DmxAnimation, DmxGroup, Outlet, RadiationTarget, SmoothieRelay, SobSound};
 use crate::color::ThemePreset;
 use crate::knob::Knob;
 use crate::mqtt::DEFAULT_BROKER;
@@ -112,39 +112,55 @@ pub enum CliCommand {
     /// Send a DMX animation command to edi/cmd/dmx
     ///
     /// Payload: {"args":"<group> <animation>"}
-    #[command(after_help = "Examples:\n  subraumctl dmx subraum.all rainbow\n  subraumctl dmx hack.floor backgroundb")]
+    #[command(
+        after_help = "Examples:\n  subraumctl dmx subraum.all rainbow\n  subraumctl dmx hack.floor backgroundb"
+    )]
     Dmx(DmxArgs),
 
     /// Apply warm/cold values to white-light cells
     ///
     /// Publishes `w <warm> c <cold> ` to light/esp/request/<cell> for every
     /// selected cell. Cell status is read from light/esp/status/<cell>.
-    #[command(after_help = "Examples:\n  subraumctl white-light apply --warm 128 --cold 200 --all\n  subraumctl white-light apply --warm 10 --cold 20 --cell LM3_A020A63498E7\n  subraumctl white-light cells\n  subraumctl white-light status")]
+    #[command(
+        after_help = "Examples:\n  subraumctl white-light apply --warm 128 --cold 200 --all\n  subraumctl white-light apply --warm 10 --cold 20 --cell LM3_A020A63498E7\n  subraumctl white-light cells\n  subraumctl white-light status"
+    )]
     WhiteLight(WhiteLightArgs),
 
     /// Switch a simple outlet via edi/cmd/act
     ///
     /// Payload: {"args":"<outlet> on"} or {"args":"<outlet> off"}
-    #[command(after_help = "Outlets: make.colors, make.bright, ert, stationaere_kuehlungsloesung, compressor, white-power\n\nExamples:\n  subraumctl outlet make.colors on\n  subraumctl outlet white-power off")]
+    #[command(
+        after_help = "Outlets: make.colors, make.bright, ert, stationaere_kuehlungsloesung, compressor, white-power\n\nExamples:\n  subraumctl outlet make.colors on\n  subraumctl outlet white-power off"
+    )]
     Outlet(OutletArgs),
 
     /// Alert tab: radiation emitters, sob sounds and the alert LED
-    #[command(after_help = "Examples:\n  subraumctl alert radiation make\n  subraumctl alert sob noot-noot\n  subraumctl alert led --watch")]
+    #[command(
+        after_help = "Examples:\n  subraumctl alert radiation make\n  subraumctl alert sob noot-noot\n  subraumctl alert led --watch"
+    )]
     Alert(AlertArgs),
 
     /// System commands (telinit)
-    #[command(after_help = "Examples:\n  subraumctl system telinit on\n  subraumctl system telinit off")]
+    #[command(
+        after_help = "Examples:\n  subraumctl system telinit on\n  subraumctl system telinit off"
+    )]
     System(SystemArgs),
 
     /// Read or set animation knobs on knob/get/<name> and knob/set/<name>
-    #[command(after_help = "Examples:\n  subraumctl knob list\n  subraumctl knob get phase\n  subraumctl knob set cx 42\n  subraumctl knob watch cx cy cz")]
+    #[command(
+        after_help = "Examples:\n  subraumctl knob list\n  subraumctl knob get phase\n  subraumctl knob set cx 42\n  subraumctl knob watch cx cy cz"
+    )]
     Knob(KnobArgs),
 
     /// Control the smoothiesaur over its HTTP command endpoint
     ///
     /// Relay and laser commands are plain HTTP POSTs to --smoothiesaur-url.
     /// Status values are read from the smoothie/# MQTT topics.
-    #[command(name = "smoothiesaur", visible_alias = "smoothie", after_help = "Examples:\n  subraumctl smoothiesaur relay pump-primary on\n  subraumctl smoothiesaur laser 128\n  subraumctl smoothiesaur zero\n  subraumctl smoothiesaur status --watch")]
+    #[command(
+        name = "smoothiesaur",
+        visible_alias = "smoothie",
+        after_help = "Examples:\n  subraumctl smoothiesaur relay pump-primary on\n  subraumctl smoothiesaur laser 128\n  subraumctl smoothiesaur zero\n  subraumctl smoothiesaur status --watch"
+    )]
     Smoothiesaur(SmoothieArgs),
 
     /// Connect, print broker information and the alert condition
@@ -154,27 +170,39 @@ pub enum CliCommand {
     ///
     /// The payload is taken from the positional argument or from
     /// --payload-file. Use --retain to set the retain flag.
-    #[command(after_help = "Examples:\n  subraumctl publish edi/cmd/dmx '{\"args\":\"subraum.all rainbow\"}'\n  subraumctl publish edi/cmd/dmx --payload-file payload.json --retain")]
+    #[command(
+        after_help = "Examples:\n  subraumctl publish edi/cmd/dmx '{\"args\":\"subraum.all rainbow\"}'\n  subraumctl publish edi/cmd/dmx --payload-file payload.json --retain"
+    )]
     Publish(PublishArgs),
 
     /// Subscribe to a topic and print messages
-    #[command(after_help = "Examples:\n  subraumctl subscribe 'knob/get/#' --count 10\n  subraumctl subscribe 'light/esp/status/#' --count 0 --wait 30")]
+    #[command(
+        after_help = "Examples:\n  subraumctl subscribe 'knob/get/#' --count 10\n  subraumctl subscribe 'light/esp/status/#' --count 0 --wait 30"
+    )]
     Subscribe(SubscribeArgs),
 
     /// Monitor decoded status topics
-    #[command(after_help = "Examples:\n  subraumctl monitor --kind all\n  subraumctl monitor --kind smoothiesaur --duration 30")]
+    #[command(
+        after_help = "Examples:\n  subraumctl monitor --kind all\n  subraumctl monitor --kind smoothiesaur --duration 30"
+    )]
     Monitor(MonitorArgs),
 
     /// Start the interactive keyboard-driven TUI
-    #[command(after_help = "Examples:\n  subraumctl tui\n  subraumctl tui --view animation --accent-color teal\n  subraumctl tui --theme high-contrast --error-color 'rgb(255,80,80)'\n  subraumctl tui --no-safe-mode")]
+    #[command(
+        after_help = "Examples:\n  subraumctl tui\n  subraumctl tui --view animation --accent-color teal\n  subraumctl tui --theme high-contrast --error-color 'rgb(255,80,80)'\n  subraumctl tui --no-safe-mode"
+    )]
     Tui(TuiArgs),
 
     /// Generate man pages for subraumctl and its subcommands
-    #[command(after_help = "Examples:\n  subraumctl man\n  subraumctl man dmx\n  subraumctl man --output-dir ./man")]
+    #[command(
+        after_help = "Examples:\n  subraumctl man\n  subraumctl man dmx\n  subraumctl man --output-dir ./man"
+    )]
     Man(ManArgs),
 
     /// Generate shell completions
-    #[command(after_help = "Examples:\n  subraumctl completions bash\n  subraumctl completions zsh")]
+    #[command(
+        after_help = "Examples:\n  subraumctl completions bash\n  subraumctl completions zsh"
+    )]
     Completions(CompletionsArgs),
 }
 
@@ -440,8 +468,10 @@ pub enum TuiView {
 }
 
 #[derive(Args, Debug)]
-#[command(after_help = "Colors accept CSS names (teal, orange, rebeccapurple), #rgb/#rrggbb, \
-rgb(...), hsl(...) and bare r,g,b or hex values. Alpha is ignored.")]
+#[command(
+    after_help = "Colors accept CSS names (teal, orange, rebeccapurple), #rgb/#rrggbb, \
+rgb(...), hsl(...) and bare r,g,b or hex values. Alpha is ignored."
+)]
 pub struct TuiArgs {
     /// Section to open first
     #[arg(long, value_enum, default_value = "overview")]
