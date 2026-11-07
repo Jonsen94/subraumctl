@@ -77,7 +77,10 @@ fn real_stdio_keeps_startup_warnings_off_the_protocol_stream() {
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["knob_list", "white_light_cells"]);
+    assert_eq!(
+        names,
+        ["dmx", "knob_list", "white_light_apply", "white_light_cells"]
+    );
     drop(stdin);
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {

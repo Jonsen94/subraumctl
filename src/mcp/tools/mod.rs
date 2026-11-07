@@ -1,5 +1,8 @@
 //! Reviewed tool registrations. Each tool declares its own permission boundary.
 
+mod choice;
+mod lighting;
+
 use std::future::Future;
 use std::sync::Arc;
 
@@ -57,7 +60,11 @@ where
     })
 }
 
-pub(super) fn register(server: &mut McpServer) -> Result<()> {
+pub(super) fn register<B: super::backend::Backend>(
+    server: &mut McpServer,
+    backend: Arc<B>,
+) -> Result<()> {
+    lighting::register(server, backend)?;
     add(
         server,
         "white_light_cells",

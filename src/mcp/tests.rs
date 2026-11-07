@@ -10,6 +10,20 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, DuplexStream, ReadHal
 
 use super::*;
 
+#[derive(Default)]
+struct RecordingBackend(std::sync::Mutex<Vec<crate::action::ControlCommand>>);
+
+impl backend::Backend for RecordingBackend {
+    async fn send(
+        &self,
+        command: crate::action::ControlCommand,
+        _: RequestContext<RoleServer>,
+    ) -> eyre::Result<Value> {
+        self.0.lock().unwrap().push(command);
+        Ok(json!({"submitted": true}))
+    }
+}
+
 struct Client {
     reader: BufReader<ReadHalf<DuplexStream>>,
     writer: WriteHalf<DuplexStream>,
@@ -78,7 +92,7 @@ fn start(server: McpServer) -> (Client, tokio::task::JoinHandle<()>) {
 async fn catalogue_tools_return_structured_data_and_reject_extra_arguments() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let mut server = McpServer::new(Config::default());
-        tools::register(&mut server).unwrap();
+        tools::register(&mut server, Arc::new(RecordingBackend::default())).unwrap();
         let (mut client, task) = start(server);
         client.initialize().await;
         let cells = client
@@ -108,6 +122,68 @@ async fn catalogue_tools_return_structured_data_and_reject_extra_arguments() {
             )
             .await;
         assert_eq!(invalid["result"]["isError"], true);
+        drop(client);
+        task.await.unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn lighting_validates_before_device_io() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let backend = Arc::new(RecordingBackend::default());
+        let mut server = McpServer::new(Config::default());
+        tools::register(&mut server, backend.clone()).unwrap();
+        let (mut client, task) = start(server);
+        client.initialize().await;
+        for (name, arguments) in [
+            ("dmx", json!({"group": "#", "animation": "rainbow"})),
+            (
+                "dmx",
+                json!({"group": "subraum.all", "animation": "rainbow", "topic": "#"}),
+            ),
+            (
+                "white_light_apply",
+                json!({"warm": 256, "cold": 0, "all": true}),
+            ),
+            ("white_light_apply", json!({"warm": 1, "cold": 0})),
+            (
+                "white_light_apply",
+                json!({"warm": 1, "cold": 0, "cells": ["#"]}),
+            ),
+            (
+                "white_light_apply",
+                json!({"warm": 1, "cold": 0, "all": true, "cells": ["LM3_A020A63498E7"]}),
+            ),
+        ] {
+            let response = client
+                .request("tools/call", json!({"name": name, "arguments": arguments}))
+                .await;
+            assert_eq!(response["result"]["isError"], true, "{response}");
+        }
+        assert!(backend.0.lock().unwrap().is_empty());
+        for (name, arguments) in [
+            (
+                "dmx",
+                json!({"group": "subraum.all", "animation": "rainbow"}),
+            ),
+            (
+                "white_light_apply",
+                json!({"warm": 128, "cold": 200, "all": true}),
+            ),
+        ] {
+            let response = client
+                .request("tools/call", json!({"name": name, "arguments": arguments}))
+                .await;
+            assert_eq!(response["result"]["structuredContent"]["submitted"], true);
+        }
+        let commands = backend.0.lock().unwrap().clone();
+        assert_eq!(
+            commands[0].expand("").unwrap()[0].payload(),
+            r#"{"args":"subraum.all rainbow"}"#
+        );
+        assert_eq!(commands[1].expand("").unwrap().len(), 15);
         drop(client);
         task.await.unwrap();
     })

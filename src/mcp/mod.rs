@@ -1,6 +1,7 @@
 //! Optional stdio frontend. Device tools are registered explicitly here, never
 //! inferred from the CLI command tree or exposed through a generic CLI runner.
 
+mod backend;
 pub mod config;
 mod tools;
 
@@ -16,7 +17,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 
-use crate::cli::McpArgs;
+use crate::cli::{GlobalArgs, McpArgs};
 use config::{Access, Config, Group};
 
 type ToolFuture = Pin<Box<dyn Future<Output = Result<CallToolResponse, ErrorData>> + Send>>;
@@ -122,7 +123,7 @@ impl ServerHandler for McpServer {
     }
 }
 
-pub async fn run(args: McpArgs) -> Result<()> {
+pub async fn run(args: McpArgs, global: &GlobalArgs) -> Result<()> {
     let config = Config::load(args.config.as_deref())?;
     for warning in config.warnings() {
         // These startup warnings are required even with --quiet or RUST_LOG=off.
@@ -130,7 +131,10 @@ pub async fn run(args: McpArgs) -> Result<()> {
     }
 
     let mut server = McpServer::new(config);
-    tools::register(&mut server)?;
+    tools::register(
+        &mut server,
+        std::sync::Arc::new(backend::DeviceBackend::new(global)?),
+    )?;
     let service = server
         .serve(rmcp::transport::stdio_pipes())
         .await
