@@ -33,6 +33,7 @@
           commonArgs = {
             inherit src;
             strictDeps = true;
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
             nativeBuildInputs = with pkgs; [
               cmake
               pkg-config
@@ -90,6 +91,7 @@
           apps.default = {
             type = "app";
             program = "${subraumctl}/bin/subraumctl";
+            meta.description = subraumctl.meta.description;
           };
 
           checks = {
