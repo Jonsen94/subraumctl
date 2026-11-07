@@ -75,6 +75,47 @@ fn start(server: McpServer) -> (Client, tokio::task::JoinHandle<()>) {
 }
 
 #[tokio::test]
+async fn catalogue_tools_return_structured_data_and_reject_extra_arguments() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let mut server = McpServer::new(Config::default());
+        tools::register(&mut server).unwrap();
+        let (mut client, task) = start(server);
+        client.initialize().await;
+        let cells = client
+            .request("tools/call", json!({"name": "white_light_cells"}))
+            .await;
+        assert_eq!(
+            cells["result"]["structuredContent"]["cells"]
+                .as_array()
+                .unwrap()
+                .len(),
+            15
+        );
+        let knobs = client
+            .request("tools/call", json!({"name": "knob_list"}))
+            .await;
+        assert_eq!(
+            knobs["result"]["structuredContent"]["knobs"]
+                .as_array()
+                .unwrap()
+                .len(),
+            29
+        );
+        let invalid = client
+            .request(
+                "tools/call",
+                json!({"name": "knob_list", "arguments": {"topic": "#"}}),
+            )
+            .await;
+        assert_eq!(invalid["result"]["isError"], true);
+        drop(client);
+        task.await.unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn foundation_negotiates_lists_no_tools_and_rejects_calls() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let (mut client, server) = start(McpServer::new(Config::default()));

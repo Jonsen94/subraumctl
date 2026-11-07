@@ -2,6 +2,7 @@
 //! inferred from the CLI command tree or exposed through a generic CLI runner.
 
 pub mod config;
+mod tools;
 
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -128,8 +129,8 @@ pub async fn run(args: McpArgs) -> Result<()> {
         eprintln!("warning: {warning}");
     }
 
-    // Foundation only: add reviewed tool registrations here in subsequent changes.
-    let server = McpServer::new(config);
+    let mut server = McpServer::new(config);
+    tools::register(&mut server)?;
     let service = server
         .serve(rmcp::transport::stdio_pipes())
         .await

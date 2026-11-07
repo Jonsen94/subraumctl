@@ -71,7 +71,13 @@ fn real_stdio_keeps_startup_warnings_off_the_protocol_stream() {
     let response: Value =
         serde_json::from_str(&rx.recv_timeout(Duration::from_secs(5)).unwrap()).unwrap();
     assert_eq!(response["id"], 2);
-    assert_eq!(response["result"]["tools"], json!([]));
+    let names: Vec<_> = response["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["knob_list", "white_light_cells"]);
     drop(stdin);
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
