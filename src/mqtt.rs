@@ -338,7 +338,7 @@ pub fn spawn_supervisor(
                         Ok(new_client) => {
                             generation = generation.wrapping_add(1);
                             for topic in STATUS_TOPICS {
-                                let _ = new_client.subscribe(*topic, 0);
+                                let _ = new_client.subscribe(topic, 0);
                             }
                             // Announce the new generation before the consumer
                             // thread can forward the first retained message.
