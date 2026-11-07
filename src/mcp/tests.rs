@@ -350,6 +350,60 @@ async fn read_only_groups_expose_bounded_reads_without_topic_or_watch_arguments(
 }
 
 #[tokio::test]
+async fn dry_run_skips_io_and_backend_errors_do_not_expose_connection_details() {
+    use clap::Parser;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let mut global = crate::cli::Cli::try_parse_from([
+            "subraumctl",
+            "--broker",
+            "invalid://PRIVATE_CREDENTIAL@invalid",
+            "status",
+        ])
+        .unwrap()
+        .global;
+        global.no_clean_session = true;
+        assert!(backend::DeviceBackend::new(&global).is_err());
+        global.no_clean_session = false;
+        for dry_run in [true, false] {
+            global.dry_run = dry_run;
+            let mut server = McpServer::new(Config::default());
+            tools::register(
+                &mut server,
+                Arc::new(backend::DeviceBackend::new(&global).unwrap()),
+            )
+            .unwrap();
+            let (mut client, task) = start(server);
+            client.initialize().await;
+            for (name, arguments) in [
+                (
+                    "dmx",
+                    json!({"group": "subraum.all", "animation": "rainbow"}),
+                ),
+                ("status", json!({})),
+            ] {
+                let response = client
+                    .request("tools/call", json!({"name": name, "arguments": arguments}))
+                    .await;
+                assert!(!response.to_string().contains("PRIVATE_CREDENTIAL"));
+                if dry_run {
+                    assert_eq!(response["result"]["structuredContent"]["dry_run"], true);
+                } else {
+                    assert_eq!(response["result"]["isError"], true);
+                    assert_eq!(
+                        response["result"]["content"][0]["text"],
+                        "MQTT connection failed"
+                    );
+                }
+            }
+            drop(client);
+            task.await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn foundation_negotiates_lists_no_tools_and_rejects_calls() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let (mut client, server) = start(McpServer::new(Config::default()));

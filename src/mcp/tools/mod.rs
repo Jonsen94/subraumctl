@@ -9,6 +9,7 @@ mod reads;
 use std::future::Future;
 use std::sync::Arc;
 
+use crate::{knob::KNOB_SPECS, white_light};
 use eyre::Result;
 use rmcp::RoleServer;
 use rmcp::model::{CallToolResult, ContentBlock, Tool, ToolAnnotations};
@@ -49,7 +50,6 @@ where
         },
     )
 }
-use crate::{knob::KNOB_SPECS, white_light};
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
