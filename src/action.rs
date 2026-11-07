@@ -156,16 +156,19 @@ pub enum Outlet {
     Compressor,
     #[value(name = "white-power")]
     WhitePower,
+    #[value(name = "dodekaeder")]
+    Dodekaeder,
 }
 
 impl Outlet {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::MakeColors,
         Self::MakeBright,
         Self::Ert,
         Self::StationaereKuehlungsloesung,
         Self::Compressor,
         Self::WhitePower,
+        Self::Dodekaeder,
     ];
 
     pub fn topic_name(self) -> &'static str {
@@ -176,6 +179,7 @@ impl Outlet {
             Self::StationaereKuehlungsloesung => "stationaere_kuehlungsloesung",
             Self::Compressor => "compressor",
             Self::WhitePower => "white-power",
+            Self::Dodekaeder => "dodekaeder",
         }
     }
 
@@ -187,6 +191,7 @@ impl Outlet {
             Self::StationaereKuehlungsloesung => "hackpad",
             Self::Compressor => "compressor",
             Self::WhitePower => "white power",
+            Self::Dodekaeder => "dodekaeder",
         }
     }
 }
@@ -647,7 +652,7 @@ mod tests {
     #[test]
     fn outlet_payload_uses_the_topic_name() {
         let actions = ControlCommand::Outlet {
-            outlet: Outlet::StationaereKuehlungsloesung,
+            outlet: Outlet::Dodekaeder,
             on: true,
         }
         .expand("http://example/command")
@@ -656,7 +661,7 @@ mod tests {
             actions[0],
             Action::Publish {
                 topic: TOPIC_OUTLET.to_string(),
-                payload: r#"{"args":"stationaere_kuehlungsloesung on"}"#.to_string(),
+                payload: r#"{"args":"dodekaeder on"}"#.to_string(),
                 retain: false,
             }
         );
