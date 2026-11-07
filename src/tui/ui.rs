@@ -108,11 +108,6 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &mut App) {
         ),
         Span::styled("● ", Style::default().fg(app.connection_color())),
         Span::styled(connection, Style::default().fg(app.connection_color())),
-        Span::raw("  "),
-        Span::styled(
-            app.options.mqtt.broker.as_str(),
-            Style::default().fg(app.theme.muted),
-        ),
         Span::raw("  alert: "),
         Span::styled("● ", Style::default().fg(app.alert_color())),
         Span::styled(
@@ -136,6 +131,11 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &mut App) {
                 .add_modifier(Modifier::BOLD),
         ));
     }
+    spans.push(Span::raw("  "));
+    spans.push(Span::styled(
+        app.options.mqtt.broker.as_str(),
+        Style::default().fg(app.theme.muted),
+    ));
     frame.render_widget(Paragraph::new(Line::from(spans)), chunks[1]);
 }
 
