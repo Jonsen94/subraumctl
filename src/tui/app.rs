@@ -152,7 +152,10 @@ impl ConnectionState {
         match self {
             Self::Disconnected => "disconnected".to_string(),
             Self::Connecting { attempt } => format!("connecting (attempt {attempt})"),
-            Self::Connected { .. } => "connected".to_string(),
+            Self::Connected { since } => {
+                let uptime = now.saturating_duration_since(since).as_secs();
+                format!("connected ({uptime}s)")
+            }
             Self::Reconnecting { attempt, retry_at } => {
                 let remaining = retry_at.saturating_duration_since(now).as_secs();
                 format!("reconnecting in {remaining}s (attempt {attempt})")
