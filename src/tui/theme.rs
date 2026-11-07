@@ -67,20 +67,11 @@ pub const NAMED_COLORS: [(&str, &str); 24] = [
     ("darkgreen", "#006400"),
 ];
 
+#[derive(Default)]
 pub struct PaletteState {
     pub selected: usize,
     pub filter: Input,
     pub editing: bool,
-}
-
-impl Default for PaletteState {
-    fn default() -> Self {
-        Self {
-            selected: 0,
-            filter: Input::default(),
-            editing: false,
-        }
-    }
 }
 
 impl PaletteState {
