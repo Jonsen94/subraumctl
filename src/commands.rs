@@ -29,7 +29,7 @@ use crate::tui::{self, TuiOptions};
 use crate::white_light;
 
 pub async fn run(cli: Cli) -> Result<()> {
-    let is_tui = matches!(&cli.command, CliCommand::Tui(_));
+    let is_tui = matches!(&cli.command, &CliCommand::Tui(_));
     if !is_tui {
         crate::logging::init_cli(cli.global.verbose, cli.global.quiet);
     }
@@ -584,7 +584,10 @@ fn print_smoothie_message(
 
     if let Some(name) = topic.strip_prefix(RELAY_TOPIC_PREFIX) {
         let relay = SmoothieRelay::from_topic_name(name);
-        let label = relay.map(SmoothieRelay::label).unwrap_or(name);
+        let label = match relay {
+            Some(relay) => relay.label(),
+            None => name,
+        };
         let state = relay.and_then(|relay| status.relay(relay));
         return output::print_decoded(
             topic,
