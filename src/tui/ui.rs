@@ -26,6 +26,15 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
+    frame.render_widget(
+        Block::default().style(
+            Style::default()
+                .bg(app.theme.background)
+                .fg(app.theme.foreground),
+        ),
+        area,
+    );
+
     let log_height = if app.show_log {
         (area.height as u32 * app.log_height_pct as u32 / 100) as u16
     } else {
