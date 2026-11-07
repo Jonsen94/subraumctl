@@ -1119,7 +1119,7 @@ Use `flake-parts`, `crane`, `treefmt-nix`, and stable nixpkgs.
             inherit src;
             strictDeps = true;
             nativeBuildInputs = with pkgs; [ cmake pkg-config ];
-            buildInputs = with pkgs; [ openssl paho-mqtt-c ];
+            buildInputs = with pkgs; [ openssl ];
           };
 
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -1176,7 +1176,6 @@ Use `flake-parts`, `crane`, `treefmt-nix`, and stable nixpkgs.
               cmake
               pkg-config
               openssl
-              paho-mqtt-c
             ];
           };
 
@@ -1195,8 +1194,8 @@ Use `flake-parts`, `crane`, `treefmt-nix`, and stable nixpkgs.
 Notes:
 
 - No WebSocket support is compiled in; paho-mqtt uses the normal TCP transport.
-- The `bundled` feature builds the vendored Paho C library with crane;
-  `paho-mqtt-c` is also supplied for convenience/fallback.
+- The `bundled` feature builds the vendored Paho C library with crane. The
+  Nix-provided `paho-mqtt-c` is only needed if the bundled build is disabled.
 - `cmake`, `pkg-config` and `openssl` cover Paho + optional TLS (`ssl://`).
 - `Cargo.lock` and `flake.lock` cannot be generated here. Generate them once
   with `cargo generate-lockfile` / `nix flake lock` and commit them.
@@ -1378,7 +1377,8 @@ git -c user.name=Claude -c user.email=claude@anthropic.com commit -m "..."
 - **`tui-popup` compatibility**: if the crate does not render correctly with
   ratatui 0.29, use `Clear` + a centered `Block` for popups.
 - **Paho TCP build**: the crate uses the bundled C library plus OpenSSL. If
-  the build fails, drop `bundled` and link the Nix-provided `paho-mqtt-c`.
+  the build fails, drop `bundled`, add `paho-mqtt-c` to the flake inputs and
+  link the Nix-provided library.
 - **Color alpha**: terminals have no alpha; `#rrggbbaa`/`rgba()` alpha is
   ignored with a warning. Theme colors are TUI-only; CLI output is not themed.
 - **No offline queue**: commands attempted while disconnected are rejected

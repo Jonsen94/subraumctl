@@ -29,7 +29,6 @@
             ];
             buildInputs = with pkgs; [
               openssl
-              paho-mqtt-c
             ];
           };
 
@@ -93,7 +92,6 @@
               cmake
               pkg-config
               openssl
-              paho-mqtt-c
             ];
           };
 
