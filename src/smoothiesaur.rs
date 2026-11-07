@@ -41,7 +41,7 @@ pub const SAFETY_BITS: [(u32, &str); 8] = [
     (32, "aft - starboard"),
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SmoothieStatus {
     pub relays: [Option<bool>; 7],
     pub temps: [Option<f64>; 5],
@@ -50,20 +50,6 @@ pub struct SmoothieStatus {
     pub flow: FlowEstimator,
     pub safety: Option<u32>,
     pub laser: LaserReadouts,
-}
-
-impl Default for SmoothieStatus {
-    fn default() -> Self {
-        Self {
-            relays: [None; 7],
-            temps: [None; 5],
-            flow_raw: None,
-            flow_rate: None,
-            flow: FlowEstimator::default(),
-            safety: None,
-            laser: LaserReadouts::default(),
-        }
-    }
 }
 
 impl SmoothieStatus {

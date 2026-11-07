@@ -7,6 +7,10 @@
     crane.url = "github:ipetkov/crane";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = inputs @ { flake-parts, ... }:
@@ -15,9 +19,15 @@
 
       imports = [ inputs.treefmt-nix.flakeModule ];
 
-      perSystem = { pkgs, ... }:
+      perSystem = { system, ... }:
         let
-          craneLib = inputs.crane.mkLib pkgs;
+          pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ inputs.rust-overlay.overlays.default ];
+          };
+
+          rustTarget = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustTarget;
           src = craneLib.cleanCargoSource ./.;
 
           commonArgs = {

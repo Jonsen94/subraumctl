@@ -67,20 +67,11 @@ pub const NAMED_COLORS: [(&str, &str); 24] = [
     ("darkgreen", "#006400"),
 ];
 
+#[derive(Default)]
 pub struct PaletteState {
     pub selected: usize,
     pub filter: Input,
     pub editing: bool,
-}
-
-impl Default for PaletteState {
-    fn default() -> Self {
-        Self {
-            selected: 0,
-            filter: Input::default(),
-            editing: false,
-        }
-    }
 }
 
 impl PaletteState {
@@ -448,8 +439,10 @@ mod tests {
 
     #[test]
     fn palette_filters_by_name() {
-        let mut palette = PaletteState::default();
-        palette.filter = Input::new("green".to_string());
+        let palette = PaletteState {
+            filter: Input::new("green".to_string()),
+            ..Default::default()
+        };
         let filtered = palette.filtered();
         assert!(filtered.iter().any(|(name, _)| *name == "green"));
         assert!(filtered.iter().all(|(name, _)| name.contains("green")));
