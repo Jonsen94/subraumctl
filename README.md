@@ -12,6 +12,10 @@ specification and are intentionally ignored by Git.
 cargo build
 ```
 
+Building outside Nix needs `cmake`, `pkg-config` and OpenSSL development
+headers because paho-mqtt builds its bundled C library. The Nix flake supplies
+all of them.
+
 The project also provides a Nix flake with crane, flake-parts and treefmt-nix:
 
 ```sh
