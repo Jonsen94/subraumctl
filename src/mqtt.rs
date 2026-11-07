@@ -299,7 +299,6 @@ pub fn spawn_supervisor(
                 }
 
                 if stop {
-                    receiver = None;
                     stop_client(&mut client);
                     break;
                 }
