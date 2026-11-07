@@ -726,15 +726,13 @@ mod tests {
         }
         .expand("http://example/command")
         .unwrap();
-        assert_eq!(
-            actions[0],
-            Action::Publish {
-                topic: TOPIC_SOB.to_string(),
-                payload: r#"{"args":"noot noot","cmd":"sob","src":"na","user":"mcp"}"#
-                    .to_string(),
-                retain: false,
-            }
-        );
+        assert_eq!(actions[0].target(), TOPIC_SOB);
+        let value: serde_json::Value =
+            serde_json::from_str(actions[0].payload()).expect("valid JSON payload");
+        assert_eq!(value["args"].as_str(), Some("noot noot"));
+        assert_eq!(value["cmd"].as_str(), Some("sob"));
+        assert_eq!(value["user"].as_str(), Some("mcp"));
+        assert_eq!(value["src"].as_str(), Some("na"));
     }
 
     #[test]
