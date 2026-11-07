@@ -156,6 +156,7 @@ pub enum PaletteOutcome {
 pub enum PickerOutcome {
     None,
     Changed,
+    Reset,
     Apply,
     Cancel,
 }
@@ -309,7 +310,7 @@ impl ColorPicker {
             KeyCode::Char('r') => {
                 self.rgb = color_to_rgb(self.default_color);
                 self.preview_original = false;
-                PickerOutcome::Changed
+                PickerOutcome::Reset
             }
             KeyCode::Enter => PickerOutcome::Apply,
             KeyCode::Esc => PickerOutcome::Cancel,

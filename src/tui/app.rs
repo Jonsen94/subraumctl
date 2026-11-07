@@ -636,6 +636,13 @@ impl App {
                     self.theme.set(picker.role, picker.current_color());
                     next = Some(Popup::ColorPicker { picker });
                 }
+                PickerOutcome::Reset => {
+                    self.theme.set(picker.role, picker.default_color);
+                    self.set_status(
+                        format!("theme {} reset", picker.role.title()),
+                        StatusKind::Info,
+                    );
+                }
                 PickerOutcome::Apply => {
                     self.theme.set(picker.role, picker.current_color());
                     self.set_status(
