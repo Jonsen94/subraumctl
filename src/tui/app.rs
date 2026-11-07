@@ -692,6 +692,15 @@ impl App {
             return;
         };
 
+        // q closes the current input, matching the global "q closes the
+        // current view" rule. Uppercase Q already quits before this point.
+        if matches!(key.code, KeyCode::Char('q')) {
+            if let TextInputMode::Search { section, .. } = &state.mode {
+                self.clear_filter(*section);
+            }
+            return;
+        }
+
         match &mut state.mode {
             TextInputMode::Search { section, input } => match key.code {
                 KeyCode::Esc => {
