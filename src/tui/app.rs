@@ -1877,7 +1877,7 @@ impl App {
         }
         match self.alert.condition {
             AlertCondition::Green => self.theme.success,
-            AlertCondition::Blue => self.theme.accent,
+            AlertCondition::Blue => Color::Blue,
             AlertCondition::Contact => self.theme.warning,
             AlertCondition::Offworld => self.theme.alert,
             AlertCondition::Intruder
