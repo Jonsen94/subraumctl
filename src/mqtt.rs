@@ -4,6 +4,7 @@
 //! dedicated thread because paho-mqtt's connect/disconnect calls are blocking;
 //! the TUI stays responsive and simply consumes [`MqttEvent`]s.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use paho_mqtt as paho;
@@ -78,12 +79,14 @@ impl MqttOptions {
 }
 
 fn generate_client_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     let pid = std::process::id() as u128;
-    let mixed = (nanos ^ (pid << 32) ^ 0x9e37_79b9_7f4a_7c15) as u64;
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed) as u128;
+    let mixed = (nanos ^ (pid << 32) ^ (counter << 16) ^ 0x9e37_79b9_7f4a_7c15) as u64;
     format!("subraumctl-{:08x}", mixed & 0xffff_ffff)
 }
 
@@ -344,6 +347,9 @@ pub fn spawn_supervisor(
                             for topic in STATUS_TOPICS {
                                 let _ = new_client.subscribe(*topic, 0);
                             }
+                            // Announce the new generation before the consumer
+                            // thread can forward the first retained message.
+                            let _ = event_tx.send(MqttEvent::Connected { generation });
                             let new_receiver = new_client.start_consuming();
                             client = Some(new_client);
                             receiver = Some(new_receiver);
@@ -351,7 +357,6 @@ pub fn spawn_supervisor(
                             attempt = 0;
                             backoff = Duration::from_secs(1);
                             next_retry = None;
-                            let _ = event_tx.send(MqttEvent::Connected { generation });
                         }
                         Err(err) => {
                             let reason = err.to_string();
