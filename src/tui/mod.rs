@@ -13,6 +13,7 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::cursor::{Hide, Show};
+use crossterm::event::KeyEvent;
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -44,7 +45,7 @@ pub async fn run(options: TuiOptions) -> Result<()> {
     crate::logging::init_tui(options.verbose)?;
     let mut terminal = TerminalGuard::enter()?;
 
-    let (ui_tx, mut ui_rx) = mpsc::unbounded_channel::<events::UiEvent>();
+    let (ui_tx, mut ui_rx) = mpsc::unbounded_channel::<KeyEvent>();
     events::spawn_input_thread(ui_tx);
 
     let (mqtt_tx, mqtt_rx) = mpsc::unbounded_channel::<MqttCommand>();
@@ -65,10 +66,7 @@ pub async fn run(options: TuiOptions) -> Result<()> {
             .draw(|frame| ui::draw(frame, &mut app))?;
 
         tokio::select! {
-            Some(event) = ui_rx.recv() => match event {
-                events::UiEvent::Key(key) => app.handle_key(key),
-                events::UiEvent::Resize(_, _) => {}
-            },
+            Some(key) = ui_rx.recv() => app.handle_key(key),
             Some(event) = mqtt_event_rx.recv() => app.handle_mqtt_event(event),
             Some(event) = http_event_rx.recv() => app.handle_http_event(event),
             _ = ticker.tick() => app.on_tick(),

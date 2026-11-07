@@ -21,7 +21,7 @@ pub const STATUS_TOPICS: &[&str] = &[
     "smoothie/#",
 ];
 
-pub const DEFAULT_BROKER: &str = "tcp://webmqtt.subraum.c3pb.de:1883";
+pub const DEFAULT_BROKER: &str = "tcp://mqtt.subraum.c3pb.de:1883";
 
 #[derive(Clone, Debug)]
 pub struct MqttOptions {
@@ -299,7 +299,6 @@ pub fn spawn_supervisor(
                 }
 
                 if stop {
-                    receiver = None;
                     stop_client(&mut client);
                     break;
                 }
