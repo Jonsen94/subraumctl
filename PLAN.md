@@ -509,7 +509,7 @@ subraumctl [GLOBAL OPTIONS] <COMMAND>
 | `--clean-session` / `--no-clean-session` | clean | MQTT clean session |
 | `--wait <SECS>` | 3 | Timeout for get/subscribe/status |
 | `--smoothiesaur-url <URL>` | `SUBRAUMCTL_SMOOTHIESAUR_URL`, `http://172.31.64.137/command` | Smoothiesaur HTTP endpoint |
-| `--dry-run` | off | Print wire actions without connecting/sending |
+| `--dry-run` | off | Preview wire actions without publishing/sending |
 | `--json` | off | Machine-readable output |
 | `-q, --quiet` | off | Suppress non-error human output |
 | `-v, --verbose` | warn | Repeatable; info/debug/trace |
@@ -641,8 +641,9 @@ subraumctl completions zsh
 - `--json`: one object per line, e.g.
   `{"transport":"mqtt","topic":"…","payload":"…","retain":false}` or
   `{"transport":"http","url":"…","body":"…"}`.
-- `--dry-run`: same lines/objects, no connection and no HTTP request. This is
-  the primary offline test path.
+- `--dry-run`: same lines/objects. One-shot CLI commands do not connect and do
+  not send HTTP. The TUI still connects for status, but records dry-run traffic
+  instead of publishing or sending. This is the primary offline test path.
 - `subscribe`: `topic payload` per message; JSON lines with `--json`.
 - `monitor`: human-readable decoded lines, e.g. `alert: Code: Green`,
   `knob cx = 42`, `white-light LM3_… = on`,

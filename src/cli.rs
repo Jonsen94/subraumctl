@@ -90,7 +90,7 @@ pub struct GlobalArgs {
     )]
     pub smoothiesaur_url: String,
 
-    /// Print wire actions without connecting or sending anything
+    /// Preview wire actions without publishing or sending them
     #[arg(long, global = true)]
     pub dry_run: bool,
 
