@@ -219,11 +219,11 @@ pub struct WhiteLightApplyArgs {
     pub cold: u8,
 
     /// Cell id; repeat the flag for multiple cells
-    #[arg(long = "cell", value_name = "ID")]
+    #[arg(long = "cell", value_name = "ID", conflicts_with = "all")]
     pub cells: Vec<String>,
 
     /// Select every known cell
-    #[arg(long)]
+    #[arg(long, conflicts_with = "cells")]
     pub all: bool,
 }
 
