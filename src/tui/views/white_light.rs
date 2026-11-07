@@ -114,7 +114,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     )
     .header(header)
     .block(
-        panel(format!("Cells — {selected_count} selected")).border_style(focused_border(
+        panel(if app.white_light.filter.is_empty() {
+            format!("Cells — {selected_count} selected")
+        } else {
+            format!(
+                "Cells — {selected_count} selected — filter: {}",
+                app.white_light.filter
+            )
+        })
+        .border_style(focused_border(
             &app.theme,
             app.zone == FocusZone::Content,
         )),
