@@ -3,6 +3,7 @@
 
 mod backend;
 pub mod config;
+mod snapshot;
 mod tools;
 
 use std::collections::BTreeMap;

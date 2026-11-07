@@ -80,15 +80,20 @@ fn real_stdio_keeps_startup_warnings_off_the_protocol_stream() {
     assert_eq!(
         names,
         [
+            "alert_led",
             "alert_radiation",
             "alert_sob",
             "dmx",
+            "knob_get",
             "knob_list",
             "knob_set",
             "outlet",
+            "smoothiesaur_status",
+            "status",
             "system_telinit",
             "white_light_apply",
-            "white_light_cells"
+            "white_light_cells",
+            "white_light_status"
         ]
     );
     drop(stdin);

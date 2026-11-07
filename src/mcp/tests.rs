@@ -14,6 +14,13 @@ use super::*;
 struct RecordingBackend(std::sync::Mutex<Vec<crate::action::ControlCommand>>);
 
 impl backend::Backend for RecordingBackend {
+    async fn snapshot(
+        &self,
+        snapshot: snapshot::Snapshot,
+        _: RequestContext<RoleServer>,
+    ) -> eyre::Result<Value> {
+        Ok(snapshot.decode(&std::collections::HashMap::new()))
+    }
     async fn send(
         &self,
         command: crate::action::ControlCommand,
@@ -312,6 +319,34 @@ async fn opt_ins_are_disabled_by_default_and_publish_is_unfiltered_when_enabled(
     })
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn read_only_groups_expose_bounded_reads_without_topic_or_watch_arguments() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let config = toml::from_str("[tools]\nalert = 'r'\nwhite_light = 'r'\nknob = 'r'\nsmoothiesaur = 'r'\ndmx = 'x'\nsystem = 'x'").unwrap();
+        let mut server = McpServer::new(config);
+        tools::register(&mut server, Arc::new(RecordingBackend::default())).unwrap();
+        let (mut client, task) = start(server);
+        client.initialize().await;
+        let listed = client.request("tools/list", json!({})).await;
+        let names: Vec<_> = listed["result"]["tools"].as_array().unwrap().iter()
+            .map(|tool| tool["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["alert_led", "knob_get", "knob_list", "smoothiesaur_status", "status", "white_light_cells", "white_light_status"]);
+        for name in names {
+            let arguments = if name == "knob_get" { json!({"knob": "cx"}) } else { json!({}) };
+            let result = client.request("tools/call", json!({"name": name, "arguments": arguments})).await;
+            assert!(result["result"]["structuredContent"].is_object(), "{result}");
+            let invalid = client.request("tools/call", json!({"name": name, "arguments": {"topic": "#", "watch": true}})).await;
+            assert_eq!(invalid["result"]["isError"], true);
+        }
+        for name in ["subscribe", "monitor", "knob_watch", "smoothiesaur_laser", "white_light_apply", "alert_sob", "knob_set"] {
+            let result = client.request("tools/call", json!({"name": name})).await;
+            assert_eq!(result["error"]["code"], -32601);
+        }
+        drop(client);
+        task.await.unwrap();
+    }).await.unwrap();
 }
 
 #[tokio::test]
