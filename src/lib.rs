@@ -6,6 +6,7 @@
 //! both front ends send byte-identical wire messages.
 
 pub mod action;
+pub mod cli;
 pub mod color;
 pub mod decode;
 pub mod knob;
