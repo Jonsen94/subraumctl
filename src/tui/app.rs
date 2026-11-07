@@ -391,6 +391,11 @@ impl App {
                 app.connection = ConnectionState::Connecting { attempt: 0 };
                 app.set_status("connecting…", StatusKind::Info);
             }
+        } else {
+            app.set_status(
+                "disconnected — press c to connect, ? for help",
+                StatusKind::Info,
+            );
         }
 
         app
