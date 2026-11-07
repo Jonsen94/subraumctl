@@ -284,8 +284,7 @@ fn collect_messages(
 }
 
 fn subscribe_command(global: &GlobalArgs, args: SubscribeArgs) -> Result<()> {
-    let wait_seconds = args.wait.unwrap_or(global.wait);
-    let deadline = wait_deadline(wait_seconds);
+    let deadline = wait_deadline(global.wait);
     let max_count = if args.count == 0 {
         None
     } else {
@@ -743,7 +742,7 @@ fn monitor(global: &GlobalArgs, args: MonitorArgs) -> Result<()> {
         );
     }
 
-    let deadline = args.wait.and_then(|seconds| {
+    let deadline = args.duration.and_then(|seconds| {
         if seconds == 0 {
             None
         } else {

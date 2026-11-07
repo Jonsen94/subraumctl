@@ -77,7 +77,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub no_clean_session: bool,
 
-    /// Timeout in seconds for get/subscribe/monitor/status commands
+    /// Timeout in seconds for get/subscribe/status commands
     #[arg(long, global = true, default_value_t = 3)]
     pub wait: u64,
 
@@ -162,7 +162,7 @@ pub enum CliCommand {
     Subscribe(SubscribeArgs),
 
     /// Monitor decoded status topics
-    #[command(after_help = "Examples:\n  subraumctl monitor --kind all\n  subraumctl monitor --kind smoothiesaur --wait 30")]
+    #[command(after_help = "Examples:\n  subraumctl monitor --kind all\n  subraumctl monitor --kind smoothiesaur --duration 30")]
     Monitor(MonitorArgs),
 
     /// Start the interactive keyboard-driven TUI
@@ -390,10 +390,6 @@ pub struct SubscribeArgs {
     /// Number of messages to print; 0 means until the timeout/interrupt
     #[arg(long, default_value_t = 1)]
     pub count: usize,
-
-    /// Seconds to wait; 0 means no deadline (with --count 0)
-    #[arg(long)]
-    pub wait: Option<u64>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -416,9 +412,9 @@ pub struct MonitorArgs {
     #[arg(long, value_enum, default_value = "all")]
     pub kind: MonitorKind,
 
-    /// Seconds to wait; 0 means until interrupted
-    #[arg(long)]
-    pub wait: Option<u64>,
+    /// Seconds to stream before exiting; 0 or omitted means until interrupted
+    #[arg(long, value_name = "SECS")]
+    pub duration: Option<u64>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]

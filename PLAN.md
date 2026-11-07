@@ -512,7 +512,7 @@ subraumctl [GLOBAL OPTIONS] <COMMAND>
 | `--keep-alive <SECS>` | 60 | MQTT keep-alive |
 | `--connect-timeout <SECS>` | 5 | Connect timeout |
 | `--clean-session` / `--no-clean-session` | clean | MQTT clean session |
-| `--wait <SECS>` | 3 | Timeout for get/subscribe/monitor/status |
+| `--wait <SECS>` | 3 | Timeout for get/subscribe/status |
 | `--smoothiesaur-url <URL>` | `SUBRAUMCTL_SMOOTHIESAUR_URL`, `http://172.31.64.137/command` | Smoothiesaur HTTP endpoint |
 | `--dry-run` | off | Print wire actions without connecting/sending |
 | `--json` | off | Machine-readable output |
@@ -541,8 +541,8 @@ smoothiesaur zero
 smoothiesaur status [--watch]
 status
 publish <TOPIC> <PAYLOAD> [--retain] [--payload-file <PATH>]
-subscribe <TOPIC> [--count <N>] [--wait <SECS>]
-monitor [--kind alert|white-light|knobs|smoothiesaur|all] [--wait <SECS>]
+subscribe <TOPIC> [--count <N>]
+monitor [--kind alert|white-light|knobs|smoothiesaur|all] [--duration <SECS>]
 tui [OPTIONS]
 man [--output-dir <DIR>] [<NAME>]
 completions <bash|zsh|fish|powershell|elvish>
