@@ -324,7 +324,7 @@ fn print_cells(json: bool, quiet: bool) -> Result<()> {
             );
         }
     } else if !quiet {
-        println!("{:<28} {}", "ID", "GROUP");
+        println!("{:<28} GROUP", "ID");
         for cell in white_light::CELLS {
             println!("{:<28} {}", cell.id, cell.group.label());
         }
