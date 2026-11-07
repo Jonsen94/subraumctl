@@ -45,7 +45,12 @@
 
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-          subraumctl = craneLib.buildPackage (commonArgs // {
+          mcpArgs = commonArgs // {
+            cargoExtraArgs = "--features mcp";
+          };
+          mcpArtifacts = craneLib.buildDepsOnly mcpArgs;
+
+          mkPackage = extraArgs: craneLib.buildPackage (commonArgs // {
             inherit cargoArtifacts;
 
             postFixup = ''
@@ -69,11 +74,18 @@
               description = "MQTT CLI/TUI for the subraum";
               mainProgram = "subraumctl";
             };
-          });
+          } // extraArgs);
+
+          subraumctl = mkPackage { };
+          subraumctl-mcp = mkPackage {
+            cargoArtifacts = mcpArtifacts;
+            cargoExtraArgs = mcpArgs.cargoExtraArgs;
+          };
         in
         {
           packages.default = subraumctl;
           packages.subraumctl = subraumctl;
+          packages.subraumctl-mcp = subraumctl-mcp;
 
           apps.default = {
             type = "app";
@@ -81,7 +93,7 @@
           };
 
           checks = {
-            inherit subraumctl;
+            inherit subraumctl subraumctl-mcp;
 
             tests = craneLib.cargoTest (commonArgs // {
               inherit cargoArtifacts;
@@ -89,6 +101,15 @@
 
             clippy = craneLib.cargoClippy (commonArgs // {
               inherit cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            });
+
+            mcp-tests = craneLib.cargoTest (mcpArgs // {
+              cargoArtifacts = mcpArtifacts;
+            });
+
+            mcp-clippy = craneLib.cargoClippy (mcpArgs // {
+              cargoArtifacts = mcpArtifacts;
               cargoClippyExtraArgs = "--all-targets -- -D warnings";
             });
           };
