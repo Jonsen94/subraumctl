@@ -522,7 +522,7 @@ impl ControlCommand {
                 payload: json!({
                     "cmd": "sob",
                     "args": sound.payload_arg(),
-                    "user": "mcp",
+                    "user": "subraumctl",
                     "src": "na"
                 })
                 .to_string(),
@@ -740,7 +740,7 @@ mod tests {
             serde_json::from_str(actions[0].payload()).expect("valid JSON payload");
         assert_eq!(value["args"].as_str(), Some("noot noot"));
         assert_eq!(value["cmd"].as_str(), Some("sob"));
-        assert_eq!(value["user"].as_str(), Some("mcp"));
+        assert_eq!(value["user"].as_str(), Some("subraumctl"));
         assert_eq!(value["src"].as_str(), Some("na"));
     }
 
