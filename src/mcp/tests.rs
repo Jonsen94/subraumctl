@@ -192,6 +192,50 @@ async fn lighting_validates_before_device_io() {
 }
 
 #[tokio::test]
+async fn control_writes_use_domain_commands_and_respect_read_only_groups() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let backend = Arc::new(RecordingBackend::default());
+        let config = toml::from_str("[tools]\nknob = 'r'\nsystem = 'x'").unwrap();
+        let mut server = McpServer::new(config);
+        tools::register(&mut server, backend.clone()).unwrap();
+        let (mut client, task) = start(server);
+        client.initialize().await;
+        for (name, arguments) in [
+            ("knob_set", json!({"knob": "cx", "value": 42})),
+            ("system_telinit", json!({"state": "off"})),
+        ] {
+            let response = client
+                .request("tools/call", json!({"name": name, "arguments": arguments}))
+                .await;
+            assert_eq!(response["error"]["code"], -32601);
+        }
+        for (name, arguments) in [
+            ("alert_sob", json!({"sound": "noot-noot"})),
+            ("alert_radiation", json!({"target": "make"})),
+        ] {
+            let response = client
+                .request("tools/call", json!({"name": name, "arguments": arguments}))
+                .await;
+            assert_eq!(response["result"]["structuredContent"]["submitted"], true);
+        }
+        let commands = backend.0.lock().unwrap().clone();
+        assert_eq!(commands.len(), 2);
+        assert_eq!(
+            commands[0].expand("").unwrap()[0].target(),
+            crate::action::TOPIC_SOB
+        );
+        assert_eq!(
+            commands[1].expand("").unwrap()[0].target(),
+            crate::action::TOPIC_RADIATION_MAKE
+        );
+        drop(client);
+        task.await.unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn foundation_negotiates_lists_no_tools_and_rejects_calls() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let (mut client, server) = start(McpServer::new(Config::default()));

@@ -1,6 +1,7 @@
 //! Reviewed tool registrations. Each tool declares its own permission boundary.
 
 mod choice;
+mod controls;
 mod lighting;
 
 use std::future::Future;
@@ -19,6 +20,33 @@ use super::{
     McpServer,
     config::{Access, Group},
 };
+
+fn add_write<A, B, F>(
+    server: &mut McpServer,
+    name: &'static str,
+    description: &'static str,
+    group: Group,
+    backend: Arc<B>,
+    command: F,
+) -> Result<()>
+where
+    A: DeserializeOwned + JsonSchema + Send + 'static,
+    B: super::backend::Backend,
+    F: Fn(A) -> Result<crate::action::ControlCommand> + Send + Sync + 'static,
+{
+    add(
+        server,
+        name,
+        description,
+        group,
+        Access::Write,
+        move |args: A, context| {
+            let command = command(args);
+            let backend = backend.clone();
+            async move { backend.send(command?, context).await }
+        },
+    )
+}
 use crate::{knob::KNOB_SPECS, white_light};
 
 #[derive(Deserialize, JsonSchema)]
@@ -64,7 +92,8 @@ pub(super) fn register<B: super::backend::Backend>(
     server: &mut McpServer,
     backend: Arc<B>,
 ) -> Result<()> {
-    lighting::register(server, backend)?;
+    lighting::register(server, backend.clone())?;
+    controls::register(server, backend)?;
     add(
         server,
         "white_light_cells",
