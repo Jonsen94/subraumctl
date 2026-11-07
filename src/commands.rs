@@ -258,7 +258,7 @@ where
             }
             Ok(None) => break,
             Err(_) => {
-                if deadline.is_some() {
+                if deadline.is_some() || !client.is_connected() {
                     break;
                 }
             }
