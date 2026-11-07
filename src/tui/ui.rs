@@ -26,13 +26,11 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    frame.render_widget(
-        Block::default().style(
-            Style::default()
-                .bg(app.theme.background)
-                .fg(app.theme.foreground),
-        ),
+    frame.buffer_mut().set_style(
         area,
+        Style::default()
+            .bg(app.theme.background)
+            .fg(app.theme.foreground),
     );
 
     let log_height = if app.show_log {
