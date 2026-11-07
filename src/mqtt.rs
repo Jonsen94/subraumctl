@@ -56,15 +56,16 @@ impl MqttOptions {
 
         let client = paho::Client::new(create).map_err(|err| MqttError::Create(err.to_string()))?;
 
-        let mut connect_builder = paho::ConnectOptionsBuilder::new()
+        let mut connect_builder = paho::ConnectOptionsBuilder::new();
+        connect_builder
             .keep_alive_interval(self.keep_alive)
             .clean_session(self.clean_session)
             .connect_timeout(self.connect_timeout);
         if let Some(username) = &self.username {
-            connect_builder = connect_builder.user_name(username.as_str());
+            connect_builder.user_name(username.as_str());
         }
         if let Some(password) = &self.password {
-            connect_builder = connect_builder.password(password.as_str());
+            connect_builder.password(password.as_str());
         }
 
         client
@@ -166,8 +167,12 @@ pub fn publish(
     payload: &str,
     retain: bool,
 ) -> Result<(), MqttError> {
-    let mut message = paho::Message::new(topic, payload.as_bytes().to_vec(), 0);
-    message.set_retained(retain);
+    let payload = payload.as_bytes().to_vec();
+    let message = if retain {
+        paho::Message::new_retained(topic, payload, 0)
+    } else {
+        paho::Message::new(topic, payload, 0)
+    };
     client
         .publish(message)
         .map_err(|err| MqttError::Publish(err.to_string()))
@@ -299,18 +304,6 @@ pub fn spawn_supervisor(
                     break;
                 }
 
-                if let Some(receiver) = &receiver {
-                    while let Ok(Some(message)) = receiver.try_recv() {
-                        let topic = message.topic().to_string();
-                        let payload = String::from_utf8_lossy(message.payload()).into_owned();
-                        let _ = event_tx.send(MqttEvent::Message {
-                            generation,
-                            topic,
-                            payload,
-                        });
-                    }
-                }
-
                 if connected {
                     let alive = client
                         .as_ref()
@@ -367,6 +360,21 @@ pub fn spawn_supervisor(
                             let _ = event_tx.send(MqttEvent::Reconnecting { attempt, delay });
                             backoff = backoff.saturating_mul(2).min(Duration::from_secs(30));
                         }
+                    }
+                }
+
+                // Drain after the connection block so the receiver type is
+                // inferred from the `start_consuming` assignment above before
+                // this method call is resolved.
+                if let Some(receiver) = &receiver {
+                    while let Ok(Some(message)) = receiver.try_recv() {
+                        let topic = message.topic().to_string();
+                        let payload = String::from_utf8_lossy(message.payload()).into_owned();
+                        let _ = event_tx.send(MqttEvent::Message {
+                            generation,
+                            topic,
+                            payload,
+                        });
                     }
                 }
 

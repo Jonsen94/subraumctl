@@ -1053,6 +1053,13 @@ impl App {
         }
     }
 
+    fn send_dmx(&mut self) {
+        self.request_command(ControlCommand::Dmx {
+            group: DmxGroup::ALL[self.lighting.group],
+            animation: DmxAnimation::ALL[self.lighting.animation],
+        });
+    }
+
     fn send_outlet(&mut self) {
         let outlet = Outlet::ALL[self.outlets.row];
         let on = self.outlets.action == 0;

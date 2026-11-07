@@ -122,14 +122,16 @@ pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &
             ((values[index] - range.0) / (range.1 - range.0)).clamp(0.0, 1.0)
         };
         let selected = index == picker.component.min(2);
+        let line_symbol = if selected {
+            symbols::line::THICK.horizontal
+        } else {
+            symbols::line::NORMAL.horizontal
+        };
         let gauge = LineGauge::default()
             .ratio(ratio)
             .label(format!("{}: {:.0}", labels[index], values[index]))
-            .line_set(if selected {
-                symbols::line::THICK
-            } else {
-                symbols::line::NORMAL
-            })
+            .filled_symbol(line_symbol)
+            .unfilled_symbol(line_symbol)
             .filled_style(Style::default().fg(if selected { theme.accent } else { theme.muted }))
             .unfilled_style(Style::default().fg(theme.border));
         frame.render_widget(gauge, chunks[2 + index]);
