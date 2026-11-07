@@ -902,7 +902,13 @@ impl App {
                 self.lighting.animation =
                     (self.lighting.animation + 1) % DmxAnimation::ALL.len();
             }
-            KeyCode::Enter => self.send_dmx(),
+            KeyCode::Enter => {
+                if visible.is_empty() {
+                    self.set_status("no matching groups", StatusKind::Info);
+                } else {
+                    self.send_dmx();
+                }
+            }
             KeyCode::Char('/') => self.start_search(),
             _ => {}
         }
@@ -1149,7 +1155,13 @@ impl App {
                 let step = KNOB_SPECS[self.animation.focus].step_big();
                 self.adjust_knob(step);
             }
-            KeyCode::Enter => self.send_knob(),
+            KeyCode::Enter => {
+                if visible.is_empty() {
+                    self.set_status("no matching knobs", StatusKind::Info);
+                } else {
+                    self.send_knob();
+                }
+            }
             KeyCode::Esc => {
                 let index = self.animation.focus;
                 self.animation.values[index] = self.animation.committed[index];
