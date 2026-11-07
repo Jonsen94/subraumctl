@@ -1,0 +1,17 @@
+# Legacy web UI: specification only, never committed.
+/index.html
+/kevyn.js
+/paho-mqtt.js
+/user.css
+/user.js
+/version.json
+
+# Build output
+/target/
+/result
+/result-*
+/.direnv/
+
+# Editor/OS noise
+*.swp
+.DS_Store
