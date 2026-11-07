@@ -112,7 +112,7 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &mut App) {
         Span::styled(connection, Style::default().fg(app.connection_color())),
         Span::raw("  "),
         Span::styled(
-            app.options.mqtt.broker.clone(),
+            app.options.mqtt.broker.as_str(),
             Style::default().fg(app.theme.muted),
         ),
         Span::raw("  alert: "),
@@ -362,7 +362,7 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
             let mut lines: Vec<Line<'static>> = pending
                 .preview_lines(4)
                 .into_iter()
-                .map(|line| Line::from(line))
+                .map(owned_line)
                 .collect();
             lines.push(Line::from(""));
             lines.push(button_line(&app.theme, *selected, "Send"));
@@ -454,6 +454,10 @@ fn draw_text_input(frame: &mut Frame, area: Rect, app: &App) {
         x.min(inner.right().saturating_sub(1)),
         inner.y,
     ));
+}
+
+fn owned_line(text: String) -> Line<'static> {
+    Line::from(text)
 }
 
 fn button_line(theme: &Theme, selected: ConfirmChoice, confirm_label: &str) -> Line<'static> {

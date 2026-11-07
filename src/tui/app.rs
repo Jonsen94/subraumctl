@@ -796,7 +796,8 @@ impl App {
                         .traffic
                         .filtered(self.section)
                         .get(index)
-                        .map(|entry| TrafficEntry::clone(*entry));
+                        .copied()
+                        .cloned();
                     if let Some(entry) = entry {
                         self.popup = Some(Popup::TrafficDetail { entry });
                     }
