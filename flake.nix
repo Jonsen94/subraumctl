@@ -29,6 +29,7 @@
             ];
             buildInputs = with pkgs; [
               openssl
+              paho-mqtt-c
             ];
           };
 

@@ -3,6 +3,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::Color;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 
 use crate::color::{ThemeRole, color_to_hex, hsl_to_rgb, hsv_to_rgb, rgb_to_hsl, rgb_to_hsv};
 

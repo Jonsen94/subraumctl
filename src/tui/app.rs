@@ -7,6 +7,7 @@ use ratatui::style::Color;
 use throbber_widgets_tui::ThrobberState;
 use tokio::sync::mpsc::UnboundedSender;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use tui_logger::TuiWidgetState;
 
 use crate::action::{
