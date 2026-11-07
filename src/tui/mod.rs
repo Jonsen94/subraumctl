@@ -1,13 +1,32 @@
-//! Interactive TUI.
-//!
-//! This file currently provides the option type and entry point. The terminal
-//! UI is added in the following commits.
+//! Interactive TUI entry point and terminal lifecycle.
 
+mod app;
+mod events;
+mod keymap;
+mod safe_mode;
+mod theme;
+mod traffic;
+mod ui;
+mod views;
+
+use std::io;
+use std::time::Duration;
+
+use crossterm::cursor::{Hide, Show};
+use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
 use eyre::Result;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use tokio::sync::mpsc;
+use tokio::time::interval;
 
 use crate::cli::TuiView;
 use crate::color::{Theme, ThemePreset};
-use crate::mqtt::MqttOptions;
+use crate::mqtt::{self, MqttCommand, MqttEvent, MqttOptions};
+use crate::smoothiesaur::{self, HttpCommand, HttpEvent};
 
 pub struct TuiOptions {
     pub mqtt: MqttOptions,
@@ -21,6 +40,71 @@ pub struct TuiOptions {
     pub dry_run: bool,
 }
 
-pub async fn run(_options: TuiOptions) -> Result<()> {
-    eyre::bail!("TUI is not implemented yet")
+pub async fn run(options: TuiOptions) -> Result<()> {
+    crate::logging::init_tui(options.verbose)?;
+    let mut terminal = TerminalGuard::enter()?;
+
+    let (ui_tx, mut ui_rx) = mpsc::unbounded_channel::<events::UiEvent>();
+    events::spawn_input_thread(ui_tx);
+
+    let (mqtt_tx, mqtt_rx) = mpsc::unbounded_channel::<MqttCommand>();
+    let (mqtt_event_tx, mut mqtt_event_rx) = mpsc::unbounded_channel::<MqttEvent>();
+    let mqtt_options = options.mqtt.clone();
+    mqtt::spawn_supervisor(mqtt_options, mqtt_rx, mqtt_event_tx);
+
+    let (http_tx, http_rx) = mpsc::unbounded_channel::<HttpCommand>();
+    let (http_event_tx, mut http_event_rx) = mpsc::unbounded_channel::<HttpEvent>();
+    smoothiesaur::spawn_http_worker(http_rx, http_event_tx, Duration::from_secs(5));
+
+    let mut app = app::App::new(options, mqtt_tx, http_tx);
+    let mut ticker = interval(Duration::from_millis(100));
+
+    loop {
+        terminal
+            .terminal_mut()
+            .draw(|frame| ui::draw(frame, &mut app))?;
+
+        tokio::select! {
+            Some(event) = ui_rx.recv() => match event {
+                events::UiEvent::Key(key) => app.handle_key(key),
+                events::UiEvent::Resize(_, _) => {}
+            },
+            Some(event) = mqtt_event_rx.recv() => app.handle_mqtt_event(event),
+            Some(event) = http_event_rx.recv() => app.handle_http_event(event),
+            _ = ticker.tick() => app.on_tick(),
+        }
+
+        if app.should_quit {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+struct TerminalGuard {
+    terminal: Terminal<CrosstermBackend<io::Stdout>>,
+}
+
+impl TerminalGuard {
+    fn enter() -> Result<Self> {
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, Hide)?;
+        let backend = CrosstermBackend::new(stdout);
+        let terminal = Terminal::new(backend)?;
+        Ok(Self { terminal })
+    }
+
+    fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
+        &mut self.terminal
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen, Show);
+        let _ = self.terminal.show_cursor();
+    }
 }
