@@ -36,7 +36,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     } else {
         0
     };
-    let traffic_height = ((area.height / 6).clamp(5, 10)) as u16;
+    let traffic_height = (area.height / 6).clamp(5, 10);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
