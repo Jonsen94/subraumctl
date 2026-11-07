@@ -777,11 +777,11 @@ clears the filter before doing anything else.
 Traffic behaviour: `Ctrl+T` focuses; `↑/↓`, `PgUp/PgDn` scroll; `Enter` opens a
 detail popup with the full topic/payload; `Esc`/`q` returns focus to content.
 
-Application log behaviour: `tui-logger`'s smart widget handles its own level
-filter and scrolling. When focused, arrow keys/`PgUp`/`PgDn` scroll and its
-documented filter keys work; `Esc`/`q` returns focus to content (it does not
-close the pane; use `Ctrl+L` or `q` while focused to close it, matching the
-"q closes the current view" rule).
+Application log behaviour: the pane renders `tui-logger`'s smart widget. The
+current implementation does not forward key events into the widget's internal
+filter/scroll state; `Ctrl+G` focuses the pane, `Ctrl+Up`/`Ctrl+Down` resizes
+it, `t` emits a test line, and `Esc`/`q` closes it and returns focus to the
+content (matching the "q closes the current view" rule).
 
 ### 7.4 Sections
 
@@ -908,15 +908,15 @@ Always visible in supported terminal sizes, at the bottom of the content area
 
 - `Ctrl+L` toggles a top/bottom split. The bottom pane is the application log
   rendered by `tui-logger`'s smart widget.
-- Height: 35% of the body, minimum 6 lines, maximum 50%; `Ctrl+↑`/`Ctrl+↓`
-  resizes when the pane is focused.
+- Height: 35% of the terminal height by default, adjustable between 20% and
+  50% with `Ctrl+Up`/`Ctrl+Down` while the pane is focused.
 - It shows tracing events from the app, MQTT connection lifecycle, publish
   errors, HTTP errors, safe-mode decisions and paho-mqtt logs (bridged via
   tracing-log).
-- The smart widget provides level filtering, expansion of multi-line events,
-  and scrolling. `Ctrl+G` focuses it; `Esc`/`q` returns to content; `Ctrl+L`
-  closes it.
-- Initial level from `-v`; the widget can change it live.
+- The smart widget renders the log. The current implementation does not
+  forward key events into its level-filter/scroll state; `Ctrl+G` focuses it,
+  `Esc`/`q` closes it, and `t` emits a test line.
+- Initial level from `-v`.
 - Nothing is written to stderr while the TUI is active.
 
 ### 7.7 Safe mode
