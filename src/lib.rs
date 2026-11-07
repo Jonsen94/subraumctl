@@ -5,4 +5,9 @@
 //! `tui`). The CLI and TUI build the same [`action::ControlCommand`] values so
 //! both front ends send byte-identical wire messages.
 
+pub mod action;
+pub mod decode;
+pub mod knob;
+pub mod white_light;
+
 pub const APP_NAME: &str = "subraumctl";
