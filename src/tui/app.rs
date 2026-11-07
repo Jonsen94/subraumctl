@@ -1769,24 +1769,20 @@ impl App {
     }
 
     pub fn handle_http_event(&mut self, event: HttpEvent) {
+        let url = self.options.smoothie_url.clone();
         match event.result {
             Ok(()) => {
                 self.smoothie.http_error = None;
                 self.smoothie.last_http = Some(event.description);
-                self.traffic.push(TrafficEntry::http(
-                    &self.options.smoothie_url,
-                    &event.body,
-                ));
+                self.traffic
+                    .push(TrafficEntry::http(&url, &event.body));
                 self.set_status("smoothiesaur command sent", StatusKind::Success);
                 tracing::info!("smoothiesaur command sent: {}", event.body.trim_end());
             }
             Err(reason) => {
                 self.smoothie.http_error = Some(reason.clone());
-                self.traffic.push(TrafficEntry::http_error(
-                    &self.options.smoothie_url,
-                    &event.body,
-                    &reason,
-                ));
+                self.traffic
+                    .push(TrafficEntry::http_error(&url, &event.body, &reason));
                 self.set_status(format!("HTTP error: {reason}"), StatusKind::Error);
                 tracing::warn!("smoothiesaur command failed: {reason}");
             }
@@ -1795,12 +1791,16 @@ impl App {
 
     pub fn on_tick(&mut self) {
         self.throbber.calc_next();
-        if let Some(status) = &self.status {
-            if status.kind != StatusKind::Error
-                && status.at.elapsed() > Duration::from_secs(12)
-            {
-                self.status = None;
-            }
+        let clear_status = self
+            .status
+            .as_ref()
+            .map(|status| {
+                status.kind != StatusKind::Error
+                    && status.at.elapsed() > Duration::from_secs(12)
+            })
+            .unwrap_or(false);
+        if clear_status {
+            self.status = None;
         }
     }
 
