@@ -56,6 +56,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(hint), rows[1]);
 }
 
+#[allow(clippy::needless_range_loop)]
 pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &Theme) {
     frame.render_widget(Clear, area);
     let block = panel(format!("Color picker — {}", picker.role.title()))

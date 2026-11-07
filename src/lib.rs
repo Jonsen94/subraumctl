@@ -1,3 +1,6 @@
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::large_enum_variant)]
+
 //! Control CLI and TUI for the subraum MQTT system.
 //!
 //! The crate is split into a transport/domain layer (`action`, `mqtt`,
