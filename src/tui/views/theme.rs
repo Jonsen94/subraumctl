@@ -2,7 +2,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, LineGauge, List, ListItem, Paragraph};
+use ratatui::widgets::{Clear, LineGauge, List, ListItem, Paragraph};
 use ratatui::Frame;
 
 use crate::color::{color_to_hex, Theme, ThemeRole};
@@ -81,10 +81,9 @@ pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(12), Constraint::Min(0)])
         .split(chunks[0]);
-    frame.render_widget(
-        Block::default().style(Style::default().bg(picker.current_color())),
-        swatch[0],
-    );
+    frame
+        .buffer_mut()
+        .set_style(swatch[0], Style::default().bg(picker.current_color()));
     let swatch_text = vec![
         Line::from(vec![
             Span::styled("hex: ", Style::default().fg(theme.muted)),
