@@ -201,7 +201,12 @@ async fn execute_command(global: &GlobalArgs, command: &ControlCommand) -> Resul
             .timeout(Duration::from_secs(5))
             .build()?;
         for (url, body) in http_actions {
-            let response = client.post(&url).body(body.clone()).send().await?;
+            let response = client
+                .post(&url)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .body(body.clone())
+                .send()
+                .await?;
             if !response.status().is_success() {
                 return Err(eyre!(
                     "HTTP request to {url} failed with status {}",

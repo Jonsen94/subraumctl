@@ -161,6 +161,7 @@ pub fn spawn_http_worker(
         while let Some(command) = command_rx.recv().await {
             let result = match client
                 .post(&command.url)
+                .header("Content-Type", "text/plain; charset=utf-8")
                 .body(command.body.clone())
                 .send()
                 .await
