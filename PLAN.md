@@ -270,6 +270,13 @@ Laser readouts:
 (exact feature name to be confirmed during the first build; the intended
 feature is `tracing-support`).
 
+Implementation note: the final implementation uses ratatui's built-in
+`Block`, `List` and `Paragraph` primitives for popups, lists and scrolling.
+The approved optional crates `tui-popup`, `tui-widget-list` and
+`tui-scrollview` are therefore not dependencies in the current `Cargo.toml`.
+`tui-logger`, `tui-input`, `throbber-widgets-tui`, `csscolorparser` and
+`clap_mangen` are used.
+
 No other direct dependencies will be added without asking first.
 
 ### 3.3 Proposed `Cargo.toml`
