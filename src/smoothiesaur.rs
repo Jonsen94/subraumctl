@@ -77,20 +77,15 @@ impl SmoothieStatus {
             return;
         }
 
-        match topic {
-            FLOW_TOPIC => {
-                if let Ok(raw) = payload.trim().parse::<i64>() {
-                    self.flow_raw = Some(raw);
-                    self.flow_rate = Some(self.flow.update(raw, at));
-                }
+        if topic == FLOW_TOPIC {
+            if let Ok(raw) = payload.trim().parse::<i64>() {
+                self.flow_raw = Some(raw);
+                self.flow_rate = Some(self.flow.update(raw, at));
             }
-            SAFETY_TOPIC => {
-                self.safety = parse_hex(payload);
-            }
-            LASER_TOPIC => {
-                self.laser = laser_readouts(payload);
-            }
-            _ => {}
+        } else if topic == SAFETY_TOPIC {
+            self.safety = parse_hex(payload);
+        } else if topic == LASER_TOPIC {
+            self.laser = laser_readouts(payload);
         }
     }
 
