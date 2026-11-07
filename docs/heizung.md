@@ -1,5 +1,44 @@
 # Heating (Heizung)
 
+## TUI
+
+```sh
+subraumctl tui --view heizung
+# Preview offline:
+subraumctl --dry-run tui --view heizung --no-connect
+```
+
+Open **Heizung** from the sidebar or Overview, using the usual Tab, arrow and
+Enter navigation. The view lists all six rooms with their last reported target
+and remaining time. A snapshot age is shown; these are setpoints, not measured
+temperatures. Unknown readings are `?` and failures preserve the last snapshot
+with an error message.
+
+Controls follow the other device views:
+
+- **↑/↓** selects a room, target, duration, Apply, or Refresh status.
+- **Space** toggles a room; **a/n** selects all/none, as in White Light.
+- **←/→** adjusts target by 0.1 °C or duration by 15 minutes; Shift uses
+  1 °C or 60-minute steps. Type digits for an exact value, or press Enter
+  on the target/duration to edit it. Enter saves, Esc cancels.
+- **Enter** on **Apply** uses the current room selection, target and duration.
+  The standard safe-mode dialog previews the command, defaults to Cancel and
+  accepts `y` to send. **S** controls safe mode as elsewhere.
+- **Enter** on **Refresh status** reads all rooms without confirmation.
+- **Ctrl+T** opens the usual traffic pane, including heating requests/replies.
+
+Status is read on the first visit unless `--no-connect` is set. It is also
+refreshed after an acknowledged write. Requests run in a background worker,
+with one heating operation in flight at a time. A failed readback is shown
+separately from the acknowledged setting; settings are never automatically
+replayed. The MQTT `c/d/r` shortcuts retain their existing behavior. Heating
+uses its own AMQP connection, like Pizzamat.
+
+TUI, CLI and MCP share the same room/temperature/duration validation and send
+only the existing service's `get` and `set` commands.
+
+## CLI
+
 ```sh
 subraumctl heizung rooms
 subraumctl heizung status                  # all rooms
@@ -71,12 +110,14 @@ only or `heizung = "x"` to hide and disable every heating tool.
   or `{"all":true,"temperature":20}`. Omitted duration defaults to 180.
 
 Tools cannot change the endpoint, identity, routing, or timeout. Unknown fields
-are rejected. The same validation and wire protocol are used by CLI and MCP.
+are rejected. The same validation and wire protocol are used by TUI, CLI and MCP.
 
 ## Verification
 
 `cargo test` and `cargo test --features mcp` cover validation, reply decoding,
-offline CLI behavior, MCP permissions, dry runs and credential redaction.
+offline CLI behavior, TUI editing/selection/confirmation and rendering, MCP
+permissions, dry runs, readback failures and credential redaction. The combined
+branch also runs Pizzamat's TUI and MCP regression tests.
 The ignored `heizung_amqp` integration test requires a **disposable** RabbitMQ:
 
 ```sh

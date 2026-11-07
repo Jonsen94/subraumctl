@@ -232,7 +232,7 @@ pub enum CliCommand {
 
     /// Start the interactive keyboard-driven TUI
     #[command(
-        after_help = "Examples:\n  subraumctl tui\n  subraumctl tui --view animation --accent-color teal\n  subraumctl tui --theme high-contrast --error-color 'rgb(255,80,80)'\n  subraumctl tui --no-safe-mode"
+        after_help = "Examples:\n  subraumctl tui\n  subraumctl tui --view animation --accent-color teal\n  subraumctl tui --view heizung\n  subraumctl tui --theme high-contrast --error-color 'rgb(255,80,80)'\n  subraumctl tui --no-safe-mode"
     )]
     Tui(TuiArgs),
 
@@ -566,6 +566,8 @@ pub enum TuiView {
     Theme,
     #[value(name = "pizzamat", alias = "pizza")]
     Pizzamat,
+    #[value(name = "heizung")]
+    Heizung,
 }
 
 #[derive(Args, Debug)]

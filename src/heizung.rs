@@ -67,6 +67,10 @@ pub struct Request {
 }
 
 impl Request {
+    pub fn read_only(&self) -> bool {
+        self.setting.is_none()
+    }
+
     /// An omitted selection reads every known room.
     pub fn get(rooms: Vec<Room>) -> Result<Self> {
         let rooms = if rooms.is_empty() {
@@ -83,18 +87,7 @@ impl Request {
 
     pub fn set(rooms: Vec<Room>, temperature: f64, duration: u32) -> Result<Self> {
         validate_rooms(&rooms)?;
-        ensure!(
-            temperature.is_finite() && (15.0..=25.0).contains(&temperature),
-            "temperature must be between 15 and 25 degrees Celsius"
-        );
-        ensure!(
-            (temperature * 10.0 - (temperature * 10.0).round()).abs() < 1e-9,
-            "temperature must use steps of 0.1 degrees Celsius"
-        );
-        ensure!(
-            duration <= MAX_DURATION,
-            "duration must be 0..={MAX_DURATION} minutes"
-        );
+        validate_setting(temperature, duration)?;
         Ok(Self {
             rooms,
             setting: Some(((temperature * 10.0).round() / 10.0, duration)),
@@ -186,6 +179,22 @@ impl Request {
         }).collect::<Vec<_>>();
         Ok(json!({"rooms": rooms}))
     }
+}
+
+pub fn validate_setting(temperature: f64, duration: u32) -> Result<()> {
+    ensure!(
+        temperature.is_finite() && (15.0..=25.0).contains(&temperature),
+        "temperature must be between 15 and 25 degrees Celsius"
+    );
+    ensure!(
+        (temperature * 10.0 - (temperature * 10.0).round()).abs() < 1e-9,
+        "temperature must use steps of 0.1 degrees Celsius"
+    );
+    ensure!(
+        duration <= MAX_DURATION,
+        "duration must be 0..={MAX_DURATION} minutes"
+    );
+    Ok(())
 }
 
 fn validate_rooms(rooms: &[Room]) -> Result<()> {
