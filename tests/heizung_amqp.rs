@@ -83,7 +83,10 @@ async fn edi_round_trip_isolation_failures_and_queue_cleanup() {
                 let reply = |message| {
                     (
                         destination.clone(),
-                        json!({"user": destination, "msg": message, "data": "PRIVATE"}).to_string(),
+                        // Python edi.emit.msg_reply receives src and user separately:
+                        // src determines the AMQP route, user is the original caller.
+                        json!({"user": value["user"], "msg": message, "data": "PRIVATE"})
+                            .to_string(),
                     )
                 };
                 let mut replies = Vec::new();
@@ -96,7 +99,8 @@ async fn edi_round_trip_isolation_failures_and_queue_cleanup() {
                             .unwrap();
                         pending.push(reply(format!("{room}: 21.5, 02:00:00 remaining")));
                         if pending.len() == 2 {
-                            // Deliver replies out of order to catch cross-client routing bugs.
+                            // Same user, different private routes. Reverse the replies
+                            // to catch correlation by identity instead of AMQP route.
                             pending.reverse();
                             replies.append(&mut pending);
                         }

@@ -86,8 +86,10 @@ Each operation publishes JSON to exchange `cmd`, routing key `heizung`:
 ```
 
 Reads send `get <rooms...>`. A private exclusive queue is bound to exchange
-`msg` with the source's `recv` replaced by `send`, before publishing. The
-matching reply's `msg` is decoded into bounded structured fields; arbitrary
+`msg` with the source's `recv` replaced by `send`, before publishing. Replies
+are matched by their AMQP exchange and routing key, not the JSON `user` field
+(Python EDI receives the original caller identity separately). The matching
+reply's `msg` is decoded into bounded structured fields; arbitrary
 backend text and connection credentials are never returned. Publisher confirms
 and mandatory routing detect rejected/unrouted commands. Connection and reply
 phases each use the configured timeout, followed by at most two seconds for

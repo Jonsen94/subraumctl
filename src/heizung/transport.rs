@@ -107,17 +107,33 @@ async fn exchange(connection: &Connection, request: &Request) -> Result<Value> {
         .await
         .ok_or_else(|| eyre!("heizung reply consumer closed; command may have been applied"))?
         .map_err(|_| eyre!("heizung reply failed; command may have been applied"))?;
-    decode_reply(&delivery.data, &destination, request)
+    decode_reply(
+        &delivery.data,
+        delivery.exchange.as_str(),
+        delivery.routing_key.as_str(),
+        &destination,
+        request,
+    )
 }
 
-fn decode_reply(bytes: &[u8], destination: &str, request: &Request) -> Result<Value> {
+fn decode_reply(
+    bytes: &[u8],
+    exchange: &str,
+    routing_key: &str,
+    destination: &str,
+    request: &Request,
+) -> Result<Value> {
     ensure!(bytes.len() <= 4096, "heizung reply exceeds 4096 bytes");
-    let value: Value =
-        serde_json::from_slice(bytes).map_err(|_| eyre!("invalid heizung reply JSON"))?;
+    // The private queue's AMQP route correlates replies with this request.
+    // Python EDI receives the caller's user identity separately from src;
+    // do not require its JSON user field to equal the routing address as
+    // Pizzamat's Rust EDI string replies happen to do.
     ensure!(
-        value["user"].as_str() == Some(destination),
+        exchange == "msg" && routing_key == destination,
         "unexpected heizung reply destination"
     );
+    let value: Value =
+        serde_json::from_slice(bytes).map_err(|_| eyre!("invalid heizung reply JSON"))?;
     let message = value["msg"]
         .as_str()
         .ok_or_else(|| eyre!("heizung reply has no message"))?;
@@ -131,13 +147,45 @@ mod tests {
     #[test]
     fn replies_are_bounded_scoped_and_redacted() {
         let request = Request::get(vec![super::super::Room::Hack]).unwrap();
-        let reply = json!({"user": "subraumctl.send.test", "msg": "hack: 21.0, 00:01:02 remaining", "data": "PRIVATE"}).to_string();
-        let decoded = decode_reply(reply.as_bytes(), "subraumctl.send.test", &request).unwrap();
+        let destination = "subraumctl.send.test";
+        // Heating passes the original caller's identity to Python edi.emit.msg_reply.
+        let reply = json!({"user": "subraumctl", "msg": "hack: 21.0, 00:01:02 remaining", "data": "PRIVATE"}).to_string();
+        let decoded =
+            decode_reply(reply.as_bytes(), "msg", destination, destination, &request).unwrap();
         assert_eq!(decoded["rooms"][0]["remaining_seconds"], 62);
         assert!(!decoded.to_string().contains("PRIVATE"));
-        assert!(decode_reply(reply.as_bytes(), "other", &request).is_err());
+        assert!(decode_reply(reply.as_bytes(), "msg", "other", destination, &request).is_err());
+        assert!(
+            decode_reply(
+                reply.as_bytes(),
+                "other",
+                destination,
+                destination,
+                &request
+            )
+            .is_err()
+        );
         for reply in [b"not JSON".as_slice(), b"{}", &[b' '; 4097]] {
-            assert!(decode_reply(reply, "other", &request).is_err());
+            assert!(decode_reply(reply, "msg", destination, destination, &request).is_err());
         }
+    }
+
+    #[test]
+    fn json_user_cannot_substitute_for_the_amqp_reply_route() {
+        let request = Request::get(vec![super::super::Room::Hack]).unwrap();
+        let destination = "subraumctl.send.test";
+        let reply =
+            json!({"user": destination, "msg": "hack: 21.0, 00:01:02 remaining"}).to_string();
+        assert!(
+            decode_reply(
+                reply.as_bytes(),
+                "msg",
+                "subraumctl.send.other",
+                destination,
+                &request
+            )
+            .is_err()
+        );
+        assert!(decode_reply(reply.as_bytes(), "msg", destination, destination, &request).is_ok());
     }
 }
