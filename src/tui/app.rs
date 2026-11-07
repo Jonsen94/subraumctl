@@ -426,10 +426,12 @@ impl App {
         if ctrl {
             match key.code {
                 KeyCode::Char('l') => {
+                    self.text_input = None;
                     self.toggle_log();
                     return;
                 }
                 KeyCode::Char('t') => {
+                    self.text_input = None;
                     self.zone = if self.zone == FocusZone::Traffic {
                         FocusZone::Content
                     } else {
@@ -438,6 +440,7 @@ impl App {
                     return;
                 }
                 KeyCode::Char('g') => {
+                    self.text_input = None;
                     if self.zone == FocusZone::AppLog {
                         self.zone = FocusZone::Content;
                     } else {
@@ -447,10 +450,12 @@ impl App {
                     return;
                 }
                 KeyCode::Up if self.show_log && self.zone == FocusZone::AppLog => {
+                    self.text_input = None;
                     self.log_height_pct = (self.log_height_pct + 5).min(50);
                     return;
                 }
                 KeyCode::Down if self.show_log && self.zone == FocusZone::AppLog => {
+                    self.text_input = None;
                     self.log_height_pct = self.log_height_pct.saturating_sub(5).max(20);
                     return;
                 }
