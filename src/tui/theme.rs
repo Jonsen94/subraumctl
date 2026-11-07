@@ -439,8 +439,10 @@ mod tests {
 
     #[test]
     fn palette_filters_by_name() {
-        let mut palette = PaletteState::default();
-        palette.filter = Input::new("green".to_string());
+        let palette = PaletteState {
+            filter: Input::new("green".to_string()),
+            ..Default::default()
+        };
         let filtered = palette.filtered();
         assert!(filtered.iter().any(|(name, _)| *name == "green"));
         assert!(filtered.iter().all(|(name, _)| name.contains("green")));
