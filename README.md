@@ -1,0 +1,60 @@
+# subraumctl
+
+Rust CLI and keyboard-driven TUI for the subraum MQTT control system.
+
+The browser resources in this repository (`index.html`, `kevyn.js`,
+`paho-mqtt.js`, `user.css`, `user.js`, `version.json`) are the legacy
+specification and are intentionally ignored by Git.
+
+## Build
+
+```sh
+cargo build
+```
+
+The project also provides a Nix flake with crane, flake-parts and treefmt-nix:
+
+```sh
+nix build
+nix develop
+nix fmt
+```
+
+`Cargo.lock` and `flake.lock` are generated on the first build/lock operation.
+
+## MQTT
+
+The implementation uses normal MQTT over TCP. The default broker is
+`tcp://webmqtt.subraum.c3pb.de:1883` and can be overridden with `--broker` or
+`SUBRAUMCTL_BROKER`. WebSocket transports are intentionally not supported.
+
+## CLI
+
+```sh
+subraumctl --help
+subraumctl tui --help
+subraumctl man --output-dir ./man
+```
+
+Every subcommand documents the topic and payload it uses. Man pages are
+generated with `clap_mangen`.
+
+## TUI
+
+```sh
+subraumctl tui
+```
+
+The TUI is keyboard-first: a sidebar selects sections, the content area holds
+the controls, the traffic pane always shows outgoing MQTT messages and
+incoming payloads relevant to the current section, and `Ctrl+L` toggles the
+application log pane.
+
+- `Q` always quits.
+- `q` closes popups/inputs/panes, otherwise returns to the Overview; in
+  Overview it opens the quit confirmation.
+- Safe mode (on by default) confirms every MQTT publish and every smoothiesaur
+  HTTP command.
+- MQTT disconnects are recovered automatically with backoff and resubscription.
+
+See `PLAN.md` for the full design.
