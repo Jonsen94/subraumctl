@@ -8,6 +8,7 @@
 pub mod action;
 pub mod decode;
 pub mod knob;
+pub mod mqtt;
 pub mod white_light;
 
 pub const APP_NAME: &str = "subraumctl";
