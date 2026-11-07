@@ -552,10 +552,13 @@ impl ControlCommand {
                     }
                 ),
             }]),
-            Self::SmoothieLaser { power } => Ok(vec![Action::Http {
-                url: smoothie_url.to_string(),
-                body: format!("M771I19P{power:02x}{power:02x}\n"),
-            }]),
+            Self::SmoothieLaser { power } => {
+                let power = *power;
+                Ok(vec![Action::Http {
+                    url: smoothie_url.to_string(),
+                    body: format!("M771I19P{power:02x}{power:02x}\n"),
+                }])
+            }
             Self::SmoothieLaserZero => Ok(vec![Action::Http {
                 url: smoothie_url.to_string(),
                 body: "M771I19P0000\n".to_string(),
@@ -606,10 +609,11 @@ impl ControlCommand {
     }
 
     pub fn destructive(&self) -> bool {
-        matches!(
-            self,
-            Self::Telinit { on: false } | Self::SmoothieLaserZero
-        )
+        match self {
+            Self::Telinit { on } => !*on,
+            Self::SmoothieLaserZero => true,
+            _ => false,
+        }
     }
 }
 
