@@ -373,9 +373,15 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
         Popup::Help { scroll } => {
             let popup_area = centered_rect(80, 85, area);
             frame.render_widget(Clear, popup_area);
-            let block = Block::default().borders(Borders::ALL)
+            let block = Block::default()
+                .borders(Borders::ALL)
                 .title("Help")
-                .border_style(Style::default().fg(app.theme.accent));
+                .border_style(Style::default().fg(app.theme.accent))
+                .style(
+                    Style::default()
+                        .bg(app.theme.background)
+                        .fg(app.theme.foreground),
+                );
             let inner = block.inner(popup_area);
             frame.render_widget(block, popup_area);
             frame.render_widget(
@@ -437,9 +443,15 @@ fn draw_text_input(frame: &mut Frame, area: Rect, app: &App) {
 
     let popup_area = centered_rect(55, 30, area);
     frame.render_widget(Clear, popup_area);
-    let block = Block::default().borders(Borders::ALL)
+    let block = Block::default()
+        .borders(Borders::ALL)
         .title(title)
-        .border_style(Style::default().fg(app.theme.accent));
+        .border_style(Style::default().fg(app.theme.accent))
+        .style(
+            Style::default()
+                .bg(app.theme.background)
+                .fg(app.theme.foreground),
+        );
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
     let line = Line::from(vec![
@@ -487,9 +499,15 @@ fn render_popup(
 ) {
     let popup_area = centered_rect(percent_x, percent_y, area);
     frame.render_widget(Clear, popup_area);
-    let block = Block::default().borders(Borders::ALL)
+    let block = Block::default()
+        .borders(Borders::ALL)
         .title(title.to_string())
-        .border_style(Style::default().fg(theme.accent));
+        .border_style(Style::default().fg(theme.accent))
+        .style(
+            Style::default()
+                .bg(theme.background)
+                .fg(theme.foreground),
+        );
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
     frame.render_widget(

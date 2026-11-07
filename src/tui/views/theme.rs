@@ -60,7 +60,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 pub fn draw_picker(frame: &mut Frame, area: Rect, picker: &ColorPicker, theme: &Theme) {
     frame.render_widget(Clear, area);
     let block = panel(format!("Color picker — {}", picker.role.title()))
-        .border_style(Style::default().fg(theme.accent));
+        .border_style(Style::default().fg(theme.accent))
+        .style(
+            Style::default()
+                .bg(theme.background)
+                .fg(theme.foreground),
+        );
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
