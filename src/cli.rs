@@ -23,7 +23,7 @@ use crate::smoothiesaur::DEFAULT_SMOOTHIE_URL;
 smoothiesaur over normal MQTT (TCP). It also provides a keyboard-driven ratatui TUI \
 with safe mode, automatic reconnects, a live traffic pane and an application log pane.",
     after_help = "Broker: normal MQTT over TCP (tcp:// or ssl://), no WebSockets.\n\
-Default: tcp://webmqtt.subraum.c3pb.de:1883 (override with --broker or SUBRAUMCTL_BROKER).\n\
+Default: tcp://mqtt.subraum.c3pb.de:1883 (override with --broker or SUBRAUMCTL_BROKER).\n\
 \n\
 Examples:\n\
   subraumctl dmx subraum.all rainbow\n\
