@@ -959,7 +959,7 @@ fn render_man(args: ManArgs) -> Result<()> {
     if let Some(name) = args.name {
         let subcommand = command
             .get_subcommands()
-            .find(|subcommand| subcommand.get_name() == name)
+            .find(|subcommand| subcommand.get_name() == name.as_str())
             .ok_or_else(|| eyre!("unknown subcommand '{name}'"))?;
         let buffer = render_man_page(subcommand)?;
         if let Some(directory) = args.output_dir {
