@@ -201,6 +201,11 @@ impl TrafficLog {
 
 pub fn sections_for_topic(topic: &str) -> u16 {
     let mut mask = Section::Overview.bit();
+    if topic.starts_with("edi.cmd.pizza-") || topic.starts_with("edi.cmd.puzza-")
+        || topic.starts_with("edi.msg.subraumctl.send.")
+    {
+        mask |= Section::Pizzamat.bit();
+    }
     if topic == TOPIC_DMX {
         mask |= Section::Lighting.bit();
     } else if topic.starts_with(TOPIC_WHITE_LIGHT_REQUEST_PREFIX)
