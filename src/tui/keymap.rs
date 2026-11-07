@@ -42,6 +42,10 @@ const GLOBAL: &[KeyBinding] = &[
         action: "traffic",
     },
     KeyBinding {
+        keys: "Ctrl+G",
+        action: "focus log",
+    },
+    KeyBinding {
         keys: "S",
         action: "safe",
     },
