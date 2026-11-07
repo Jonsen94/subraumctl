@@ -2,8 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tui_input::Input;
 
-use super::app::{App, Popup, Section, StatusKind, TextInputMode, TextInputState};
-use super::safe_mode::ConfirmChoice;
+use super::app::{App, Section, StatusKind, TextInputMode, TextInputState};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
 use crate::pizzamat::{Operation, Options, Request, transport};
 use crate::mqtt::MqttCommand;
@@ -95,7 +94,7 @@ impl App {
                     );
                 } else if operation.fields().is_empty() {
                     match Request::new(operation, &self.options.pizzamat.user, &[]) {
-                        Ok(request) => self.request_pizzamat(request),
+                        Ok(request) => self.send_pizzamat(request),
                         Err(error) => self.set_status(error.to_string(), StatusKind::Error),
                     }
                 } else {
@@ -109,21 +108,6 @@ impl App {
                 }
             }
             _ => {}
-        }
-    }
-
-    pub(super) fn request_pizzamat(&mut self, request: Request) {
-        if !self.options.dry_run && !self.connection.is_connected() {
-            self.set_status("Not connected — command not sent.", StatusKind::Error);
-            return;
-        }
-        if self.safe_mode && !request.operation.read_only() {
-            self.popup = Some(Popup::ConfirmPizza {
-                request,
-                selected: ConfirmChoice::Cancel,
-            });
-        } else {
-            self.send_pizzamat(request);
         }
     }
 

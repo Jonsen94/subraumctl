@@ -77,7 +77,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         )]),
         Line::from("S toggles safe mode"),
         Line::from(if app.safe_mode {
-            "Device commands and Pizzamat writes confirmed"
+            "Device MQTT and HTTP commands confirmed"
         } else {
             "commands are sent immediately"
         }),

@@ -386,8 +386,9 @@ pub fn help_text() -> String {
         text.push_str(&format!("  {keys:<18} {action}\n"));
     }
     text.push_str("\nSafe mode\n");
-    text.push_str("  Safe mode is on by default and confirms every MQTT publish and\n");
-    text.push_str("  every smoothiesaur HTTP command and Pizzamat write. Press S to toggle it; turning\n");
+    text.push_str("  Safe mode is on by default and confirms device MQTT publishes and\n");
+    text.push_str("  smoothiesaur HTTP commands. Pizzamat actions run immediately.\n");
+    text.push_str("  Press S to toggle safe mode; turning\n");
     text.push_str("  it off requires a second confirmation.\n");
     text.push_str("\nQuit semantics\n");
     text.push_str("  Q always quits immediately. q closes the current popup, input,\n");

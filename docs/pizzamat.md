@@ -45,8 +45,9 @@ requests require connection, just like other MQTT controls; press `c` to connect
 Select an action with Up/Down and press Enter. Enter advances through text
 fields; Escape cancels. All characters, including `q`/`Q`, are accepted in text
 fields; Ctrl+C still quits. PgUp/PgDn scroll the response; Home returns to its
-top. Safe mode confirms writes and previews the command, arguments and identity.
-Reads run immediately. Pizzamat shares the TUI's MQTT connection; the normal
+top. Pizzamat actions run immediately, including when safe mode is on. For
+actions with fields, the final Enter submits the command; Escape cancels the
+unfinished form. Pizzamat shares the TUI's MQTT connection; the normal
 connect/disconnect/reconnect controls apply. Disconnecting cancels pending
 requests, and reconnecting does not repeat orders.
 
@@ -89,6 +90,55 @@ Responses contain `command`, `submitted`, `dry_run` and the backend's `message`.
 `submitted: true` means a reply was received, not that the backend accepted the
 change. `--dry-run` returns the validated command/identity/arguments without
 connecting. No broker address or credentials are included in tool results.
+
+## Checking a timeout locally
+
+Use `mosquitto_sub` and `mosquitto_pub` (the `mosquitto-clients` package on many
+distributions) against the same MQTT broker as subraumctl. The commands below
+use the default host/port; add your normal authentication/TLS options if needed.
+This checks the deployed bridge rather than the simulated service used by tests.
+
+Start the subscriber first, in terminal A. `-R` ignores retained messages and
+`-W 30` stops after 30 seconds. The broad subscription also reveals replies
+that arrive under a different topic mapping:
+
+```sh
+mosquitto_sub -h mqtt.subraum.c3pb.de -p 1883 -t '#' -v -R -W 30
+```
+
+In terminal B, send a read-only list request:
+
+```sh
+mosquitto_pub -h mqtt.subraum.c3pb.de -p 1883 \
+  -t 'edi.cmd.pizza-list' \
+  -m '{"cmd":"pizza-list","args":"","user":"joni","src":"subraumctl.recv.bridgecheck","dst":null}'
+```
+
+The client currently expects a reply on `edi.msg.subraumctl.send.bridgecheck`
+containing JSON with `msg` and `user: "subraumctl.send.bridgecheck"`.
+
+- **The command appears, followed by that reply:** the round trip works. Check
+  the TUI traffic detail for its actual command, `src`, and reply topic.
+- **A reply arrives on a different topic:** the client's topic mapping needs
+  to match that route. Record the exact topic and payload shape.
+- **Only the outgoing command appears:** MQTT accepted the publish, but that
+  does not prove delivery through the bridge. Repeat the same read-only request
+  using `-t 'edi/cmd/pizza-list'` to check slash-separated command routing. Start
+  the subscriber again if its 30-second window has expired.
+- **Neither command nor reply appears:** check that both terminals use the
+  same broker/vhost and credentials, and check subscription/publish permissions
+  (`-d` enables Mosquitto client diagnostics).
+
+For a debug Pizzamat deployment, repeat with **both** `cmd` and the topic's
+command name changed to `puzza-list`. Keep the test read-only: there is no need
+to add/reset orders to test routing.
+
+If neither command spelling/topic produces a reply, check Pizzamat's service
+logs while sending the list request: did it receive `pizza-list`/`puzza-list`,
+and did it publish a reply for `subraumctl.send.bridgecheck`? Receipt without an
+MQTT reply points toward reply bridging/permissions or a handler failure;
+no receipt points toward command routing, permissions, or the service being
+offline. A broker publish acknowledgement alone is not confirmation from EDI.
 
 ## Protocol and development
 

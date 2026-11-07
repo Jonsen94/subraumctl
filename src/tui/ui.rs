@@ -350,23 +350,6 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
             ];
             render_popup(frame, area, "Safe mode", lines, 58, 32, &app.theme);
         }
-        Popup::ConfirmPizza { request, selected } => {
-            let lines = vec![
-                Line::from(request.operation.label()),
-                Line::from(format!("User: {}", request.user)),
-                Line::from(format!(
-                    "MQTT {}",
-                    crate::pizzamat::transport::command_topic(request, app.options.pizzamat.debug)
-                )),
-                Line::from(request.args.clone()),
-                Line::from(""),
-                button_line(&app.theme, *selected, "Send"),
-                Line::from("y send   n/Esc/q cancel"),
-            ];
-            render_popup(
-                frame, area, "Confirm Pizzamat command", lines, 80, 50, &app.theme,
-            );
-        }
         Popup::ConfirmCommand { pending, selected } => {
             let mut lines: Vec<Line<'static>> = pending
                 .preview_lines(4)

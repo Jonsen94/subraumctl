@@ -169,10 +169,6 @@ impl ConnectionState {
 }
 
 pub enum Popup {
-    ConfirmPizza {
-        request: crate::pizzamat::Request,
-        selected: ConfirmChoice,
-    },
     Quit {
         selected: ConfirmChoice,
     },
@@ -602,23 +598,6 @@ impl App {
 
         let mut next = None;
         match popup {
-            Popup::ConfirmPizza {
-                request,
-                mut selected,
-            } => {
-                if matches!(key.code, KeyCode::Tab | KeyCode::Left | KeyCode::Right) {
-                    selected = selected.toggle();
-                    next = Some(Popup::ConfirmPizza { request, selected });
-                } else if key.code == KeyCode::Char('y')
-                    || (key.code == KeyCode::Enter && selected.is_confirm())
-                {
-                    self.send_pizzamat(request);
-                } else if matches!(key.code, KeyCode::Esc | KeyCode::Char('n') | KeyCode::Enter) {
-                    self.set_status("Pizzamat command cancelled", StatusKind::Info);
-                } else {
-                    next = Some(Popup::ConfirmPizza { request, selected });
-                }
-            }
             Popup::Quit { mut selected } => {
                 if matches!(key.code, KeyCode::Tab | KeyCode::Left | KeyCode::Right) {
                     selected = selected.toggle();
@@ -802,7 +781,7 @@ impl App {
                                 &self.options.pizzamat.user,
                                 fields,
                             ) {
-                                Ok(request) => self.request_pizzamat(request),
+                                Ok(request) => self.send_pizzamat(request),
                                 Err(error) => {
                                     self.set_status(error.to_string(), StatusKind::Error);
                                     fields.pop();

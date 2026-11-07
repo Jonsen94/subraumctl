@@ -65,7 +65,7 @@ fn screen(app: &mut App) -> String {
 }
 
 #[test]
-fn food_input_accepts_global_keys_and_writes_require_confirmation() {
+fn food_input_accepts_global_keys_and_submits_with_safe_mode_on() {
     let (mut app, mut rx) = app();
     choose(&mut app, Operation::Add);
     for ch in "Quattro q [S] ? cdr".chars() {
@@ -74,9 +74,8 @@ fn food_input_accepts_global_keys_and_writes_require_confirmation() {
     assert!(!app.should_quit);
     assert!(screen(&mut app).contains("Quattro q [S] ? cdr"));
     press(&mut app, KeyCode::Enter);
-    assert!(matches!(app.popup, Some(Popup::ConfirmPizza { .. })));
-    assert!(rx.try_recv().is_err());
-    press(&mut app, KeyCode::Char('y'));
+    assert!(app.safe_mode);
+    assert!(app.popup.is_none());
     let request = rx.try_recv().unwrap();
     assert_eq!(request.args, "Quattro q [S] ? cdr");
     assert_eq!(request.user, "alice");
@@ -101,9 +100,6 @@ fn dry_run_reads_work_without_mqtt_and_cancelled_forms_do_not_send() {
     press(&mut app, KeyCode::Esc);
     assert!(app.text_input.is_none());
     assert!(rx.try_recv().is_err());
-    choose(&mut app, Operation::Reset);
-    press(&mut app, KeyCode::Enter); // default selection is Cancel
-    assert!(rx.try_recv().is_err());
     choose(&mut app, Operation::List);
     assert!(app.popup.is_none());
     assert_eq!(rx.try_recv().unwrap().operation, Operation::List);
@@ -121,11 +117,26 @@ fn live_requests_require_the_existing_mqtt_connection() {
         since: std::time::Instant::now(),
     };
     choose(&mut app, Operation::Clear);
-    assert!(matches!(app.popup, Some(Popup::ConfirmPizza { .. })));
-    app.connection = ConnectionState::Disconnected;
-    press(&mut app, KeyCode::Char('y'));
-    assert!(rx.try_recv().is_err());
-    assert!(!app.pizzamat.busy);
+    assert!(app.popup.is_none());
+    assert_eq!(rx.try_recv().unwrap().operation, Operation::Clear);
+    assert!(app.pizzamat.busy);
+}
+
+#[test]
+fn every_pizzamat_operation_bypasses_safe_mode() {
+    for safe_mode in [true, false] {
+        for operation in Operation::ALL {
+            let (mut app, mut rx) = app();
+            app.safe_mode = safe_mode;
+            choose(&mut app, operation);
+            for _ in operation.fields() {
+                press(&mut app, KeyCode::Char('x'));
+                press(&mut app, KeyCode::Enter);
+            }
+            assert!(app.popup.is_none(), "{operation:?}");
+            assert_eq!(rx.try_recv().unwrap().operation, operation);
+        }
+    }
 }
 
 #[test]
