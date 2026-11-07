@@ -674,10 +674,7 @@ impl App {
     }
 
     fn restore_picker_color(&mut self, picker: &ColorPicker) {
-        self.theme.set(
-            picker.role,
-            Color::Rgb(picker.original.0, picker.original.1, picker.original.2),
-        );
+        self.theme.set(picker.role, picker.original_color);
     }
 
     fn handle_text_input_key(&mut self, key: KeyEvent) {

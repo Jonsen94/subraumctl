@@ -162,7 +162,7 @@ pub enum PickerOutcome {
 
 pub struct ColorPicker {
     pub role: ThemeRole,
-    pub original: (u8, u8, u8),
+    pub original_color: Color,
     pub rgb: (u8, u8, u8),
     pub mode: ColorMode,
     pub component: usize,
@@ -177,7 +177,7 @@ impl ColorPicker {
         let rgb = color_to_rgb(current);
         Self {
             role,
-            original: rgb,
+            original_color: current,
             rgb,
             mode: ColorMode::Rgb,
             component: 0,
@@ -190,7 +190,7 @@ impl ColorPicker {
 
     pub fn current_color(&self) -> Color {
         if self.preview_original {
-            Color::Rgb(self.original.0, self.original.1, self.original.2)
+            self.original_color
         } else {
             Color::Rgb(self.rgb.0, self.rgb.1, self.rgb.2)
         }
