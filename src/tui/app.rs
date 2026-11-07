@@ -1046,7 +1046,6 @@ impl App {
     fn send_outlet(&mut self) {
         let outlet = Outlet::ALL[self.outlets.row];
         let on = self.outlets.action == 0;
-        self.outlets.last_sent[self.outlets.row] = Some(on);
         self.request_command(ControlCommand::Outlet { outlet, on });
     }
 
@@ -1717,6 +1716,11 @@ impl App {
             } => {
                 self.traffic
                     .push(TrafficEntry::published(&topic, &payload, retain));
+                if topic == crate::action::TOPIC_OUTLET {
+                    if let Some((index, on)) = outlet_from_payload(&payload) {
+                        self.outlets.last_sent[index] = Some(on);
+                    }
+                }
                 if let Some(name) = topic.strip_prefix(TOPIC_KNOB_SET_PREFIX) {
                     if let Some(knob) = Knob::from_name(name) {
                         if let Ok(value) = payload.parse::<f64>() {
@@ -1903,6 +1907,23 @@ fn move_in_list(list: &[usize], current: usize, delta: isize) -> usize {
 
 fn adjust_u8(value: u8, delta: i16) -> u8 {
     (value as i16 + delta).clamp(0, 255) as u8
+}
+
+fn outlet_from_payload(payload: &str) -> Option<(usize, bool)> {
+    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    let args = value.get("args")?.as_str()?;
+    let mut parts = args.split_whitespace();
+    let name = parts.next()?;
+    let state = parts.next()?;
+    let index = Outlet::ALL
+        .iter()
+        .position(|outlet| outlet.topic_name() == name)?;
+    let on = match state {
+        "on" => true,
+        "off" => false,
+        _ => return None,
+    };
+    Some((index, on))
 }
 
 #[cfg(test)]
