@@ -36,7 +36,7 @@ pub fn init_tui(verbose: u8) -> Result<()> {
     };
     tracing_subscriber::registry()
         .with(level)
-        .with(tui_logger::tracing::TuiTracingSubscriberLayer)
+        .with(tui_logger::TuiTracingSubscriberLayer)
         .try_init()
         .map_err(|err| eyre::eyre!("failed to initialize TUI logging: {err}"))?;
     Ok(())

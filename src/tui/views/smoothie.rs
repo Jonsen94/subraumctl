@@ -151,7 +151,7 @@ fn draw_temperatures(frame: &mut Frame, area: Rect, app: &App) {
         .map(|(index, (_, label))| {
             Line::from(vec![
                 Span::styled(
-                    format!("{:<26}", **label),
+                    format!("{:<26}", *label),
                     Style::default().fg(app.theme.muted),
                 ),
                 Span::raw(temp_text(app.smoothie.status.temps[index])),
@@ -198,7 +198,7 @@ fn draw_safety(frame: &mut Frame, area: Rect, app: &App) {
         let mut cells = Vec::new();
         for (_, label, on) in chunk {
             let state = if known { status_text(Some(*on)) } else { "?" };
-            cells.push(Cell::from(format!("{}: {state}", **label)));
+            cells.push(Cell::from(format!("{}: {state}", *label)));
         }
         while cells.len() < 2 {
             cells.push(Cell::from(""));

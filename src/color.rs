@@ -202,15 +202,11 @@ pub fn parse_color(input: &str) -> Result<ParsedColor, ColorError> {
     let parsed: CssColor = candidate
         .parse()
         .map_err(|_| ColorError::Invalid(input.to_string()))?;
-    let (red, green, blue, alpha) = parsed.to_rgba();
-    let color = Color::Rgb(
-        (red * 255.0).round().clamp(0.0, 255.0) as u8,
-        (green * 255.0).round().clamp(0.0, 255.0) as u8,
-        (blue * 255.0).round().clamp(0.0, 255.0) as u8,
-    );
+    let [red, green, blue, alpha] = parsed.to_rgba8();
+    let color = Color::Rgb(red, green, blue);
     Ok(ParsedColor {
         color,
-        alpha_ignored: alpha < 1.0 - 1e-6,
+        alpha_ignored: alpha < 255,
     })
 }
 

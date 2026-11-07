@@ -7,6 +7,7 @@ use ratatui::style::Color;
 use throbber_widgets_tui::ThrobberState;
 use tokio::sync::mpsc::UnboundedSender;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use tui_logger::TuiWidgetState;
 
 use crate::action::{
@@ -1050,6 +1051,13 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => self.send_outlet(),
             _ => {}
         }
+    }
+
+    fn send_dmx(&mut self) {
+        self.request_command(ControlCommand::Dmx {
+            group: DmxGroup::ALL[self.lighting.group],
+            animation: DmxAnimation::ALL[self.lighting.animation],
+        });
     }
 
     fn send_outlet(&mut self) {

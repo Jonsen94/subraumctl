@@ -267,7 +267,10 @@ fn draw_app_log(frame: &mut Frame, area: Rect, app: &mut App) {
         }));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    frame.render_stateful_widget(TuiLoggerSmartWidget::default(), inner, &mut app.log_state);
+    frame.render_widget(
+        TuiLoggerSmartWidget::default().state(&mut app.log_state),
+        inner,
+    );
 }
 
 fn draw_status(frame: &mut Frame, area: Rect, app: &App) {

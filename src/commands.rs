@@ -58,7 +58,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                 execute_command(&global, &command).await
             }
             WhiteLightCommand::Cells => print_cells(global.json, global.quiet),
-            WhiteLightCommand::Status(status) => white_light_status(&global, status.watch),
+            WhiteLightCommand::Status(status) => white_light_status(&global, status.watch).await,
         },
         CliCommand::Outlet(args) => {
             let command = ControlCommand::Outlet {
@@ -74,7 +74,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             AlertCommand::Sob { sound } => {
                 execute_command(&global, &ControlCommand::Sob { sound }).await
             }
-            AlertCommand::Led { watch } => alert_led(&global, watch),
+            AlertCommand::Led { watch } => alert_led(&global, watch).await,
         },
         CliCommand::System(args) => match args.command {
             SystemCommand::Telinit { state } => {
@@ -87,7 +87,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             KnobCommand::Set { knob, value } => {
                 execute_command(&global, &ControlCommand::KnobSet { knob, value }).await
             }
-            KnobCommand::Watch { knobs } => knob_watch(&global, knobs),
+            KnobCommand::Watch { knobs } => knob_watch(&global, knobs).await,
         },
         CliCommand::Smoothiesaur(args) => match args.command {
             SmoothieCommand::Relay { relay, state } => {
@@ -106,12 +106,12 @@ pub async fn run(cli: Cli) -> Result<()> {
             SmoothieCommand::Zero => {
                 execute_command(&global, &ControlCommand::SmoothieLaserZero).await
             }
-            SmoothieCommand::Status { watch } => smoothie_status(&global, watch),
+            SmoothieCommand::Status { watch } => smoothie_status(&global, watch).await,
         },
         CliCommand::Status => status(&global),
         CliCommand::Publish(args) => publish(&global, args).await,
-        CliCommand::Subscribe(args) => subscribe_command(&global, args),
-        CliCommand::Monitor(args) => monitor(&global, args),
+        CliCommand::Subscribe(args) => subscribe_command(&global, args).await,
+        CliCommand::Monitor(args) => monitor(&global, args).await,
         CliCommand::Tui(args) => run_tui(global.clone(), args).await,
         CliCommand::Man(args) => render_man(args),
         CliCommand::Completions(args) => render_completions(args),
@@ -283,7 +283,7 @@ fn collect_messages(
     Ok(messages)
 }
 
-fn subscribe_command(global: &GlobalArgs, args: SubscribeArgs) -> Result<()> {
+async fn subscribe_command(global: &GlobalArgs, args: SubscribeArgs) -> Result<()> {
     let deadline = wait_deadline(global.wait);
     let max_count = if args.count == 0 {
         None
@@ -390,7 +390,7 @@ fn knob_get(global: &GlobalArgs, knob: Knob) -> Result<()> {
     )
 }
 
-fn knob_watch(global: &GlobalArgs, knobs: Vec<Knob>) -> Result<()> {
+async fn knob_watch(global: &GlobalArgs, knobs: Vec<Knob>) -> Result<()> {
     let topics: Vec<String> = if knobs.is_empty() {
         vec![format!("{TOPIC_KNOB_GET_PREFIX}#")]
     } else {
@@ -425,7 +425,7 @@ fn knob_watch(global: &GlobalArgs, knobs: Vec<Knob>) -> Result<()> {
     Ok(())
 }
 
-fn alert_led(global: &GlobalArgs, watch: bool) -> Result<()> {
+async fn alert_led(global: &GlobalArgs, watch: bool) -> Result<()> {
     let topic = TOPIC_ALERT_CONDITION.to_string();
     if global.dry_run {
         return output::print_info(
@@ -468,7 +468,7 @@ fn alert_led(global: &GlobalArgs, watch: bool) -> Result<()> {
     Ok(())
 }
 
-fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
+async fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
     let topic = format!("{TOPIC_WHITE_LIGHT_STATUS_PREFIX}#");
     if global.dry_run {
         return output::print_info(
@@ -521,7 +521,7 @@ fn white_light_status(global: &GlobalArgs, watch: bool) -> Result<()> {
     Ok(())
 }
 
-fn smoothie_status(global: &GlobalArgs, watch: bool) -> Result<()> {
+async fn smoothie_status(global: &GlobalArgs, watch: bool) -> Result<()> {
     let topic = format!("{TOPIC_SMOOTHIE_PREFIX}#");
     if global.dry_run {
         return output::print_info(
@@ -693,7 +693,7 @@ fn print_smoothie_summary(status: &SmoothieStatus, json: bool, quiet: bool) -> R
     Ok(())
 }
 
-fn monitor(global: &GlobalArgs, args: MonitorArgs) -> Result<()> {
+async fn monitor(global: &GlobalArgs, args: MonitorArgs) -> Result<()> {
     let mut topics = Vec::new();
     match args.kind {
         MonitorKind::Alert => topics.push(TOPIC_ALERT_CONDITION.to_string()),

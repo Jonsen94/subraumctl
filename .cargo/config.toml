@@ -1,5 +1,5 @@
 # CMake 4 rejects projects that declare compatibility with CMake < 3.5.
-# paho-mqtt-sys 0.9.0 still bundles such a paho.mqtt.c version, so let its
-# build script restore the old policy compatibility while configuring.
+# The paho.mqtt.c version bundled by paho-mqtt-sys declares an older minimum,
+# so restore the old policy compatibility while its build script configures.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
