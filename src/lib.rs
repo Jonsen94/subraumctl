@@ -8,10 +8,14 @@
 pub mod action;
 pub mod cli;
 pub mod color;
+pub mod commands;
 pub mod decode;
 pub mod knob;
+pub mod logging;
 pub mod mqtt;
+pub mod output;
 pub mod smoothiesaur;
+pub mod tui;
 pub mod white_light;
 
 pub const APP_NAME: &str = "subraumctl";
