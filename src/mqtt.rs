@@ -11,17 +11,14 @@ use paho_mqtt as paho;
 use thiserror::Error;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 
-use crate::action::{
-    TOPIC_ALERT_CONDITION, TOPIC_KNOB_GET_PREFIX, TOPIC_SMOOTHIE_PREFIX,
-    TOPIC_WHITE_LIGHT_STATUS_PREFIX,
-};
+use crate::action::TOPIC_ALERT_CONDITION;
 
 /// Topics the TUI subscribes to after every (re)connect.
 pub const STATUS_TOPICS: &[&str] = &[
     TOPIC_ALERT_CONDITION,
-    TOPIC_WHITE_LIGHT_STATUS_PREFIX,
-    TOPIC_KNOB_GET_PREFIX,
-    TOPIC_SMOOTHIE_PREFIX,
+    "light/esp/status/#",
+    "knob/get/#",
+    "smoothie/#",
 ];
 
 pub const DEFAULT_BROKER: &str = "tcp://webmqtt.subraum.c3pb.de:1883";
