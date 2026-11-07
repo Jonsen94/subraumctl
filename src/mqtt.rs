@@ -186,7 +186,7 @@ pub fn subscribe(client: &paho::Client, topic: &str) -> Result<(), MqttError> {
 }
 
 pub fn disconnect(client: &paho::Client) {
-    let _ = client.stop_consuming();
+    client.stop_consuming();
     let _ = client.disconnect(None);
 }
 
