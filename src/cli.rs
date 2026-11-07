@@ -130,7 +130,7 @@ pub enum CliCommand {
     ///
     /// Payload: {"args":"<outlet> on"} or {"args":"<outlet> off"}
     #[command(
-        after_help = "Outlets: make.colors, make.bright, ert, stationaere_kuehlungsloesung, compressor, white-power\n\nExamples:\n  subraumctl outlet make.colors on\n  subraumctl outlet white-power off"
+        after_help = "Outlets: make.colors, make.bright, ert, stationaere_kuehlungsloesung, compressor, white-power, dodekaeder\n\nExamples:\n  subraumctl outlet make.colors on\n  subraumctl outlet white-power off"
     )]
     Outlet(OutletArgs),
 
@@ -605,6 +605,18 @@ mod tests {
             CliCommand::Dmx(args) => {
                 assert_eq!(args.group, DmxGroup::SubraumAll);
                 assert_eq!(args.animation, DmxAnimation::Rainbow);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_dodekaeder_outlet() {
+        let cli = Cli::try_parse_from(["subraumctl", "outlet", "dodekaeder", "on"]).unwrap();
+        match cli.command {
+            CliCommand::Outlet(args) => {
+                assert_eq!(args.outlet, Outlet::Dodekaeder);
+                assert!(args.state.is_on());
             }
             other => panic!("unexpected command: {other:?}"),
         }

@@ -211,7 +211,7 @@ pub struct WhiteLightState {
 pub struct OutletsState {
     pub row: usize,
     pub action: usize,
-    pub last_sent: [Option<bool>; 6],
+    pub last_sent: [Option<bool>; Outlet::ALL.len()],
 }
 
 #[derive(Default)]
@@ -348,7 +348,7 @@ impl App {
             outlets: OutletsState {
                 row: 0,
                 action: 0,
-                last_sent: [None; 6],
+                last_sent: [None; Outlet::ALL.len()],
             },
             alerts: AlertsState::default(),
             system: SystemState::default(),
