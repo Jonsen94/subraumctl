@@ -88,6 +88,14 @@ struct TerminalGuard {
 
 impl TerminalGuard {
     fn enter() -> Result<Self> {
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = disable_raw_mode();
+            let mut stdout = io::stdout();
+            let _ = execute!(stdout, LeaveAlternateScreen, Show);
+            previous_hook(info);
+        }));
+
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, Hide)?;
