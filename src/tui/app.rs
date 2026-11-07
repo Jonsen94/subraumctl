@@ -468,15 +468,6 @@ impl App {
             return;
         }
 
-        if self.zone == FocusZone::AppLog {
-            self.handle_log_key(key);
-            return;
-        }
-        if self.zone == FocusZone::Traffic {
-            self.handle_traffic_key(key);
-            return;
-        }
-
         // In the white-light view, w/c focus the warm/cold sliders. `c` would
         // otherwise be captured by the global connect shortcut.
         if self.zone == FocusZone::Content && self.section == Section::WhiteLight {
@@ -493,6 +484,7 @@ impl App {
             }
         }
 
+        // These actions are available from every focus zone.
         match key.code {
             KeyCode::Char('?') => {
                 self.popup = Some(Popup::Help { scroll: 0 });
@@ -530,6 +522,19 @@ impl App {
                 self.cycle_zone(false);
                 return;
             }
+            _ => {}
+        }
+
+        if self.zone == FocusZone::AppLog {
+            self.handle_log_key(key);
+            return;
+        }
+        if self.zone == FocusZone::Traffic {
+            self.handle_traffic_key(key);
+            return;
+        }
+
+        match key.code {
             KeyCode::Char('q') => {
                 self.go_back();
                 return;
