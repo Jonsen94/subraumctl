@@ -130,6 +130,7 @@ fn app(connect: bool) -> (App, UnboundedReceiver<Request>) {
                 timeout: Duration::from_secs(1),
             },
             influx: Options::default(),
+            soundboard: crate::soundboard::Options::default(),
             graph_minutes: 1,
             graph_layout: GraphLayout::Overlay,
             music: crate::music::Options::default(),

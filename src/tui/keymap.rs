@@ -484,6 +484,28 @@ pub fn section_bindings(section: Section) -> &'static [KeyBinding] {
         Section::Climate => CONTENT_CLIMATE,
         Section::Power => CONTENT_POWER,
         Section::Music => CONTENT_MUSIC,
+        Section::Soundboard => &[
+            KeyBinding {
+                keys: "/",
+                action: "edit search",
+            },
+            KeyBinding {
+                keys: "Enter",
+                action: "search / play selected sample",
+            },
+            KeyBinding {
+                keys: "↑ ↓ PgUp PgDn",
+                action: "select search field / result",
+            },
+            KeyBinding {
+                keys: "Esc",
+                action: "leave search input",
+            },
+            KeyBinding {
+                keys: "Ctrl+C",
+                action: "quit",
+            },
+        ],
         Section::Pizzamat => &[
             KeyBinding {
                 keys: "↑ ↓",
@@ -542,6 +564,10 @@ pub fn help_text() -> String {
     text.push_str("  log pane or traffic focus; otherwise it returns to Overview.\n");
     text.push_str("  In Overview, q opens the quit confirmation popup.\n");
     text.push_str("  Pizzamat text fields accept q/Q as text; Esc cancels, Ctrl+C quits.\n");
+    text.push_str(
+        "  Soundboard search accepts all text shortcuts; Enter searches, Esc leaves input.\n",
+    );
+    text.push_str("  Soundboard playback requires safe-mode confirmation; searches do not.\n");
     text
 }
 

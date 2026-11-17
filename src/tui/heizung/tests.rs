@@ -30,6 +30,7 @@ fn app() -> (
                 smoothie_url: String::new(),
                 pizzamat: crate::pizzamat::Options::default(),
                 influx: crate::influx::Options::default(),
+                soundboard: crate::soundboard::Options::default(),
                 graph_minutes: 60,
                 graph_layout: crate::cli::GraphLayout::Table,
                 heizung: Options {
@@ -316,6 +317,8 @@ fn global_shortcuts_sidebar_and_status_rendering_remain_consistent() {
     assert_eq!(app.section, Section::Overview);
     app.zone = FocusZone::Sidebar;
     press(&mut app, KeyCode::End);
+    assert_eq!(app.section, Section::Soundboard);
+    press(&mut app, KeyCode::Up);
     assert_eq!(app.section, Section::Music);
     press(&mut app, KeyCode::Up);
     assert_eq!(app.section, Section::Power);

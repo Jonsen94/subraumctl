@@ -109,6 +109,14 @@ pub struct GlobalArgs {
     #[arg(long, global = true, env = "SUBRAUMCTL_HEIZUNG_TIMEOUT", default_value_t = 15, value_parser = clap::value_parser!(u64).range(1..=120))]
     pub heizung_timeout: u64,
 
+    /// Soundboard EDI AMQP endpoint (independent of MQTT and other EDI services)
+    #[arg(long, global = true, env = "SUBRAUMCTL_SOUNDBOARD_AMQP_URL", default_value = crate::soundboard::DEFAULT_AMQP_URL)]
+    pub soundboard_amqp_url: String,
+
+    /// Soundboard request timeout in seconds (1..=120)
+    #[arg(long, global = true, env = "SUBRAUMCTL_SOUNDBOARD_TIMEOUT", default_value_t = crate::soundboard::Options::default().timeout.as_secs(), value_parser = clap::value_parser!(u64).range(1..=120))]
+    pub soundboard_timeout: u64,
+
     /// Pizzamat EDI AMQP endpoint
     #[arg(long, global = true, env = "SUBRAUMCTL_PIZZAMAT_AMQP_URL", default_value = crate::pizzamat::DEFAULT_AMQP_URL)]
     pub pizzamat_amqp_url: String,
@@ -710,6 +718,8 @@ pub enum TuiView {
     Power,
     /// MPD playback and radio stations
     Music,
+    /// Search and play soundboard samples over EDI AMQP
+    Soundboard,
 }
 
 #[derive(Args, Debug)]
@@ -862,6 +872,46 @@ mod tests {
     #[test]
     fn command_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn soundboard_view_and_independent_connection_flags() {
+        let cli = Cli::try_parse_from(["subraumctl", "tui", "--view", "soundboard"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            CliCommand::Tui(TuiArgs {
+                view: TuiView::Soundboard,
+                ..
+            })
+        ));
+        assert_eq!(
+            cli.global.soundboard_amqp_url,
+            crate::soundboard::Options::default().amqp_url
+        );
+        assert_eq!(
+            cli.global.soundboard_timeout,
+            crate::soundboard::Options::default().timeout.as_secs()
+        );
+        for timeout in ["0", "121"] {
+            assert!(
+                Cli::try_parse_from(["subraumctl", "tui", "--soundboard-timeout", timeout])
+                    .is_err()
+            );
+        }
+        for timeout in ["1", "120"] {
+            let cli = Cli::try_parse_from([
+                "subraumctl",
+                "--soundboard-amqp-url",
+                "amqp://soundboard",
+                "tui",
+                "--soundboard-timeout",
+                timeout,
+            ])
+            .unwrap();
+            assert_eq!(cli.global.soundboard_amqp_url, "amqp://soundboard");
+            assert_ne!(cli.global.soundboard_amqp_url, cli.global.pizzamat_amqp_url);
+            assert_ne!(cli.global.soundboard_amqp_url, cli.global.heizung_amqp_url);
+        }
     }
 
     #[test]
