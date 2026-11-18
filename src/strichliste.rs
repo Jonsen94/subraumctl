@@ -2,6 +2,9 @@
 //! Only selected account fields escape this module; transaction responses are ignored.
 
 pub mod cli;
+#[cfg(test)]
+#[path = "../tests/common/strichliste.rs"]
+pub(crate) mod test_fixture;
 
 use std::time::Duration;
 
@@ -18,6 +21,17 @@ pub struct Options {
     pub user: Option<String>,
     pub user_id: Option<u64>,
     pub timeout: Duration,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            url: None,
+            user: None,
+            user_id: None,
+            timeout: Duration::from_secs(5),
+        }
+    }
 }
 
 impl Options {

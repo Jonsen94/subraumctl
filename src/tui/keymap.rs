@@ -484,6 +484,29 @@ pub fn section_bindings(section: Section) -> &'static [KeyBinding] {
         Section::Climate => CONTENT_CLIMATE,
         Section::Power => CONTENT_POWER,
         Section::Music => CONTENT_MUSIC,
+        #[cfg(feature = "strichliste")]
+        Section::Strichliste => &[
+            KeyBinding {
+                keys: "↑ ↓",
+                action: "action / recipient",
+            },
+            KeyBinding {
+                keys: "Enter",
+                action: "select / next field / submit",
+            },
+            KeyBinding {
+                keys: "/",
+                action: "search recipients again",
+            },
+            KeyBinding {
+                keys: "Esc",
+                action: "cancel form",
+            },
+            KeyBinding {
+                keys: "Ctrl+C",
+                action: "quit",
+            },
+        ],
         Section::Soundboard => &[
             KeyBinding {
                 keys: "/",
@@ -568,6 +591,8 @@ pub fn help_text() -> String {
         "  Soundboard search accepts all text shortcuts; Enter searches, Esc leaves input.\n",
     );
     text.push_str("  Soundboard playback requires safe-mode confirmation; searches do not.\n");
+    #[cfg(feature = "strichliste")]
+    text.push_str("  Strichliste forms accept global shortcuts as text; Esc cancels, Ctrl+C quits.\n  Payments and transfers use safe-mode confirmation; reads do not.\n");
     text
 }
 

@@ -1215,6 +1215,8 @@ async fn run_tui(global: GlobalArgs, args: TuiArgs) -> Result<()> {
         pizzamat: crate::pizzamat::Options::from_global(&global),
         heizung: crate::heizung::Options::from_global(&global),
         music: crate::music::Options::from_global(&global),
+        #[cfg(feature = "strichliste")]
+        strichliste: crate::strichliste::Options::from_global(&global),
         soundboard: crate::soundboard::Options {
             amqp_url: global.soundboard_amqp_url.clone(),
             timeout: Duration::from_secs(global.soundboard_timeout),

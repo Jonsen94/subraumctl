@@ -1,6 +1,6 @@
 # Strichliste 0.11.0
 
-Optional CLI integration for the deployed legacy 0.11.0 variant, including its
+Optional CLI and TUI integration for the deployed legacy 0.11.0 variant, including its
 transfer/comment extension and `weightedCountOfPurchases` user field.
 
 ## Build and configure
@@ -12,7 +12,8 @@ cargo build --release --features mcp,strichliste
 ```
 
 Nix packages: `.#subraumctl-strichliste` and `.#subraumctl-mcp-strichliste`.
-Default builds do not include Strichliste commands or connection options.
+The same `strichliste` feature enables both CLI commands and the TUI tab.
+Default builds do not include Strichliste commands, the tab, or connection options.
 
 Supply the API base URL and **one** account selector:
 
@@ -59,6 +60,39 @@ fail the operation instead of producing an incomplete rank.
 `--json` emits a JSON result; `--quiet` suppresses human results. Interactive
 prompts go to stderr. `--dry-run` performs no HTTP requests, including no user
 lookup: it previews values/comments, with recipient selection left unresolved.
+
+## TUI
+
+With the same URL and account environment variables configured:
+
+```sh
+cargo build --features strichliste
+./target/debug/subraumctl tui --view strichliste
+```
+
+Choose **Strichliste** in the sidebar or start directly with `--view strichliste`.
+The tab shows your balance in euros and your rank by weighted purchase count.
+It reads once when first opened; `--no-connect` suppresses that initial read.
+**Refresh balance and rank** works manually, independently of MQTT.
+
+- Use **Up/Down**, then **Enter** to choose **Pay**, **Add credit**, or **Send**.
+- Pay/add prompt for a positive euro amount and an optional comment.
+- Send prompts for part of a recipient's name. Select a match with
+  **Up/Down**, **PageUp/PageDown**, **Home/End**, then **Enter**. Your own account is
+  excluded. **/** starts a new search. Then enter the amount and comment.
+- **Esc** cancels a form without submitting. Text fields accept global shortcut
+  characters as literal text; **Ctrl+C** still quits.
+- With the application's default safe mode enabled, a confirmation previews the
+  amount, comment and recipient before submitting. Cancel is selected by default.
+  Disabling safe mode makes completion of the comment field submit immediately.
+
+Requests run in the background; repeated activation while busy does not enqueue
+duplicate payments. Successful writes refresh balance and rank. Failed reads
+keep previous values labelled `(previous)`. Unconfirmed writes are never retried.
+`--dry-run` previews operations without HTTP or invented balances/search results.
+
+TUI payments use your comment and the existing safe-mode setting; the MCP write
+opt-in and forced MCP comment apply only to MCP.
 
 ## Restricted MCP
 

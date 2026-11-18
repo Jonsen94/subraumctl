@@ -796,6 +796,9 @@ pub enum TuiView {
     Music,
     /// Search and play soundboard samples over EDI AMQP
     Soundboard,
+    /// Strichliste balance, purchase rank, payments and transfers
+    #[cfg(feature = "strichliste")]
+    Strichliste,
 }
 
 #[derive(Args, Debug)]
@@ -954,6 +957,8 @@ mod tests {
     fn strichliste_is_feature_gated() {
         let result = Cli::try_parse_from(["subraumctl", "strichliste", "balance"]);
         assert_eq!(result.is_ok(), cfg!(feature = "strichliste"));
+        let view = Cli::try_parse_from(["subraumctl", "tui", "--view", "strichliste"]);
+        assert_eq!(view.is_ok(), cfg!(feature = "strichliste"));
         #[cfg(not(feature = "strichliste"))]
         assert!(
             Cli::try_parse_from(["subraumctl", "--strichliste-user-id", "27", "status"]).is_err()

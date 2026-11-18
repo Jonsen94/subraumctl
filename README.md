@@ -22,7 +22,7 @@ Rust CLI and keyboard-driven TUI for the subraum MQTT control system.
 
 [Searchable Soundboard tab over EDI AMQP](docs/soundboard.md)
 
-[Strichliste 0.11.0 accounts, payments and transfers](docs/strichliste.md)
+[Strichliste 0.11.0 accounts, payments and transfers in the CLI, TUI and MCP](docs/strichliste.md)
 
 # Issues
 
@@ -33,7 +33,7 @@ Issues are disabled. If you find an issue, send patches.
 TUI mouse interaction is optional and disabled by default. Build with
 `--features tui-mouse` to include it.
 
-Strichliste is optional: build with `--features strichliste`, or
+Strichliste CLI and TUI are optional: build with `--features strichliste`, or
 `--features mcp,strichliste` for its restricted MCP tools.
 
 # License

@@ -4,8 +4,7 @@ use clap::Parser;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
-#[path = "../../tests/common/strichliste.rs"]
-mod fixture;
+use crate::strichliste::test_fixture as fixture;
 
 #[tokio::test]
 async fn only_own_account_tools_and_double_opt_in_writes_are_exposed() {
