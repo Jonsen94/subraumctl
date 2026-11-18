@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 [features]
 default = []
 mcp = ["dep:rmcp", "dep:serde", "dep:toml"]
+strichliste = []
 tui-mouse = []
 
 [dependencies]

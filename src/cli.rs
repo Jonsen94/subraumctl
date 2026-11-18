@@ -46,6 +46,41 @@ pub struct Cli {
 
 #[derive(Args, Clone, Debug)]
 pub struct GlobalArgs {
+    /// Strichliste 0.11.0 API base URL, including /strich-api
+    #[cfg(feature = "strichliste")]
+    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_URL")]
+    pub strichliste_url: Option<String>,
+
+    /// Your Strichliste user name (exact, case-insensitive match)
+    #[cfg(feature = "strichliste")]
+    #[arg(
+        long,
+        global = true,
+        env = "SUBRAUMCTL_STRICHLISTE_USER",
+        conflicts_with = "strichliste_user_id"
+    )]
+    pub strichliste_user: Option<String>,
+
+    /// Your Strichliste numeric user id (alternative to --strichliste-user)
+    #[cfg(feature = "strichliste")]
+    #[arg(
+        long,
+        global = true,
+        env = "SUBRAUMCTL_STRICHLISTE_USER_ID",
+        conflicts_with = "strichliste_user"
+    )]
+    pub strichliste_user_id: Option<u64>,
+
+    /// Strichliste HTTP timeout in seconds
+    #[cfg(feature = "strichliste")]
+    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_TIMEOUT", default_value_t = 5, value_parser = clap::value_parser!(u64).range(1..=120))]
+    pub strichliste_timeout: u64,
+
+    /// Allow MCP pay/add tools; also requires strichliste = "w" in MCP config
+    #[cfg(all(feature = "strichliste", feature = "mcp"))]
+    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_MCP_WRITES")]
+    pub strichliste_mcp_writes: bool,
+
     /// MQTT broker URI (tcp:// or ssl://; WebSockets are not supported)
     #[arg(
         short = 'b',
@@ -174,6 +209,10 @@ pub struct GlobalArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum CliCommand {
+    /// Balance, payments, transfers and purchase rank on Strichliste 0.11.0
+    #[cfg(feature = "strichliste")]
+    Strichliste(StrichlisteArgs),
+
     /// Start the MCP server on stdio (only explicitly registered tools are exposed)
     #[cfg(feature = "mcp")]
     Mcp(McpArgs),
@@ -303,6 +342,43 @@ pub enum CliCommand {
         after_help = "Examples:\n  subraumctl completions bash\n  subraumctl completions zsh"
     )]
     Completions(CompletionsArgs),
+}
+
+#[cfg(feature = "strichliste")]
+#[derive(Args, Debug)]
+pub struct StrichlisteArgs {
+    #[command(subcommand)]
+    pub command: StrichlisteCommand,
+}
+
+#[cfg(feature = "strichliste")]
+#[derive(Subcommand, Debug)]
+pub enum StrichlisteCommand {
+    /// Show your current balance in euros
+    Balance,
+    /// Show your rank by weightedCountOfPurchases (highest first, ties share rank)
+    Rank,
+    /// Pay a positive amount in euros from your balance
+    Pay {
+        #[arg(value_parser = crate::strichliste::parse_amount)]
+        amount: f64,
+        #[arg(long, default_value = "")]
+        comment: String,
+    },
+    /// Add a positive amount in euros to your balance
+    Add {
+        #[arg(value_parser = crate::strichliste::parse_amount)]
+        amount: f64,
+        #[arg(long, default_value = "")]
+        comment: String,
+    },
+    /// Send euros to another user selected through interactive name search
+    Send {
+        #[arg(value_parser = crate::strichliste::parse_amount)]
+        amount: f64,
+        #[arg(long, default_value = "")]
+        comment: String,
+    },
 }
 
 #[cfg(feature = "mcp")]
@@ -872,6 +948,47 @@ mod tests {
     #[test]
     fn command_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn strichliste_is_feature_gated() {
+        let result = Cli::try_parse_from(["subraumctl", "strichliste", "balance"]);
+        assert_eq!(result.is_ok(), cfg!(feature = "strichliste"));
+        #[cfg(not(feature = "strichliste"))]
+        assert!(
+            Cli::try_parse_from(["subraumctl", "--strichliste-user-id", "27", "status"]).is_err()
+        );
+    }
+
+    #[cfg(feature = "strichliste")]
+    #[test]
+    fn strichliste_requires_positive_amounts_and_unambiguous_account_options() {
+        for amount in ["0", "-1", "NaN", "inf", "1e308", "pi"] {
+            assert!(Cli::try_parse_from(["subraumctl", "strichliste", "pay", amount]).is_err());
+        }
+        let cli = Cli::try_parse_from([
+            "subraumctl",
+            "--strichliste-user",
+            "27",
+            "strichliste",
+            "pay",
+            "0.001",
+        ])
+        .unwrap();
+        assert_eq!(cli.global.strichliste_user.as_deref(), Some("27"));
+        assert!(cli.global.strichliste_user_id.is_none());
+        assert!(
+            Cli::try_parse_from([
+                "subraumctl",
+                "--strichliste-user",
+                "Me",
+                "--strichliste-user-id",
+                "27",
+                "strichliste",
+                "balance",
+            ])
+            .is_err()
+        );
     }
 
     #[test]
