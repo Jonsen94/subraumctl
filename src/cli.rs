@@ -354,6 +354,8 @@ pub struct StrichlisteArgs {
 #[cfg(feature = "strichliste")]
 #[derive(Subcommand, Debug)]
 pub enum StrichlisteCommand {
+    /// Show recent transactions returned by your account (newest first)
+    Transactions,
     /// Show your current balance in euros
     Balance,
     /// Show your rank by weightedCountOfPurchases (highest first, ties share rank)
@@ -957,6 +959,8 @@ mod tests {
     fn strichliste_is_feature_gated() {
         let result = Cli::try_parse_from(["subraumctl", "strichliste", "balance"]);
         assert_eq!(result.is_ok(), cfg!(feature = "strichliste"));
+        let history = Cli::try_parse_from(["subraumctl", "strichliste", "transactions"]);
+        assert_eq!(history.is_ok(), cfg!(feature = "strichliste"));
         let view = Cli::try_parse_from(["subraumctl", "tui", "--view", "strichliste"]);
         assert_eq!(view.is_ok(), cfg!(feature = "strichliste"));
         #[cfg(not(feature = "strichliste"))]

@@ -95,6 +95,69 @@ pub struct User {
     weighted_count: Option<f64>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Transaction {
+    pub id: u64,
+    pub created_at: String,
+    pub value_eur: f64,
+    pub comment: Option<String>,
+}
+
+impl Transaction {
+    pub fn kind(&self) -> &'static str {
+        match (self.value_eur, self.comment.as_deref().unwrap_or("")) {
+            (value, comment) if value < 0.0 && comment.starts_with("to ") => "Transfer out",
+            (value, comment) if value > 0.0 && comment.starts_with("from ") => "Transfer in",
+            (value, _) if value < 0.0 => "Pay",
+            (value, _) if value > 0.0 => "Add credit",
+            _ => "Adjustment",
+        }
+    }
+}
+
+pub struct AccountSnapshot {
+    pub balance: Result<f64>,
+    pub transactions: Result<Vec<Transaction>>,
+}
+
+fn parse_transactions(value: &Value, user_id: u64) -> Result<Vec<Transaction>> {
+    let entries = value["transactions"]
+        .as_array()
+        .ok_or_else(|| eyre!("Strichliste transactions missing or invalid"))?;
+    let mut ids = std::collections::HashSet::new();
+    let mut transactions = entries
+        .iter()
+        .map(|entry| {
+            ensure!(
+                entry["userId"].as_u64() == Some(user_id),
+                "Strichliste transaction belongs to an unexpected user"
+            );
+            let id = entry["id"]
+                .as_u64()
+                .ok_or_else(|| eyre!("invalid transaction id"))?;
+            ensure!(ids.insert(id), "duplicate Strichliste transaction ids");
+            Ok(Transaction {
+                id,
+                created_at: entry["createDate"]
+                    .as_str()
+                    .filter(|date| !date.is_empty())
+                    .ok_or_else(|| eyre!("invalid transaction date"))?
+                    .to_owned(),
+                value_eur: number(&entry["value"])
+                    .ok_or_else(|| eyre!("invalid transaction value"))?,
+                comment: match entry.get("comment") {
+                    None | Some(Value::Null) => None,
+                    Some(Value::String(comment)) => Some(comment.clone()),
+                    _ => return Err(eyre!("invalid transaction comment")),
+                },
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    // Legacy transaction ids increase with each booking.
+    transactions.sort_by_key(|transaction| std::cmp::Reverse(transaction.id));
+    Ok(transactions)
+}
+
 fn number(value: &Value) -> Option<f64> {
     value
         .as_f64()
@@ -305,6 +368,24 @@ impl Client {
         } else {
             Ok(self.select(&self.users().await?)?.clone())
         }
+    }
+
+    /// Recent transactions supplied by the configured account's detail endpoint.
+    /// Kept separate from Request so history is not exposed through MCP.
+    pub async fn account_snapshot(&self) -> Result<AccountSnapshot> {
+        let id = match self.options.user_id {
+            Some(id) => id,
+            None => self.current_user().await?.id,
+        };
+        let value = self.get(&format!("user/{id}")).await?;
+        let user = User::parse(&value)?;
+        ensure!(user.id == id, "Strichliste returned an unexpected user");
+        Ok(AccountSnapshot {
+            balance: user
+                .balance
+                .ok_or_else(|| eyre!("Strichliste balance missing or invalid")),
+            transactions: parse_transactions(&value, id),
+        })
     }
 
     pub async fn execute(&self, request: &Request, comment: &str) -> Result<Value> {

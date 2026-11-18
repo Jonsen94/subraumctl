@@ -8,6 +8,44 @@ use crate::cli::{GlobalArgs, StrichlisteCommand};
 
 pub async fn run(global: &GlobalArgs, command: StrichlisteCommand) -> Result<()> {
     let (request, comment) = match command {
+        StrichlisteCommand::Transactions => {
+            if global.dry_run {
+                return print(global, json!({"dry_run": true}));
+            }
+            let transactions = Client::new(Options::from_global(global))?
+                .account_snapshot()
+                .await?
+                .transactions?;
+            if global.json {
+                let transactions: Vec<_> = transactions
+                    .iter()
+                    .map(|transaction| {
+                        json!({
+                            "id": transaction.id,
+                            "created_at": transaction.created_at,
+                            "value_eur": transaction.value_eur,
+                            "comment": transaction.comment,
+                        })
+                    })
+                    .collect();
+                println!("{}", json!({"transactions": transactions}));
+            } else if !global.quiet {
+                if transactions.is_empty() {
+                    println!("No recent transactions.");
+                }
+                for transaction in transactions {
+                    println!(
+                        "{}  {:+.2} EUR  {}  #{}  {}",
+                        transaction.created_at.escape_debug(),
+                        transaction.value_eur,
+                        transaction.kind(),
+                        transaction.id,
+                        transaction.comment.as_deref().unwrap_or("").escape_debug(),
+                    );
+                }
+            }
+            return Ok(());
+        }
         StrichlisteCommand::Balance => (Request::Balance, String::new()),
         StrichlisteCommand::Rank => (Request::Rank, String::new()),
         StrichlisteCommand::Pay { amount, comment } => (Request::Pay(amount), comment),

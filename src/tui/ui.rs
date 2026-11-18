@@ -425,6 +425,42 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
                 &app.theme,
             );
         }
+        #[cfg(feature = "strichliste")]
+        Popup::StrichlisteTransaction {
+            transaction,
+            scroll,
+        } => {
+            let popup_area = centered_rect(90, 75, area);
+            frame.render_widget(Clear, popup_area);
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title("Transaction · Up/Down scroll · Enter/Esc close")
+                .border_style(Style::default().fg(app.theme.accent))
+                .style(
+                    Style::default()
+                        .bg(app.theme.background)
+                        .fg(app.theme.foreground),
+                );
+            let inner = block.inner(popup_area);
+            frame.render_widget(block, popup_area);
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "#{} · {}\nDate: {}\nAmount: {:+} EUR (full precision)\n\nComment: {}",
+                    transaction.id,
+                    transaction.kind(),
+                    transaction.created_at.escape_debug(),
+                    transaction.value_eur,
+                    transaction
+                        .comment
+                        .as_deref()
+                        .unwrap_or("(none)")
+                        .escape_debug(),
+                ))
+                .wrap(Wrap { trim: false })
+                .scroll((*scroll, 0)),
+                inner,
+            );
+        }
         Popup::ColorPicker { picker } => {
             views::theme::draw_picker(frame, centered_rect(75, 80, area), picker, &app.theme);
         }

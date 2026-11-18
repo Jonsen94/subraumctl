@@ -487,6 +487,10 @@ pub fn section_bindings(section: Section) -> &'static [KeyBinding] {
         #[cfg(feature = "strichliste")]
         Section::Strichliste => &[
             KeyBinding {
+                keys: "t",
+                action: "transactions / actions",
+            },
+            KeyBinding {
                 keys: "r",
                 action: "refresh account now (auto every 10s)",
             },

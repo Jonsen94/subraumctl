@@ -36,6 +36,7 @@ or `SUBRAUMCTL_STRICHLISTE_TIMEOUT` (1–120 seconds).
 ```sh
 subraumctl strichliste balance
 subraumctl strichliste rank
+subraumctl strichliste transactions
 subraumctl strichliste pay 1.25 --comment 'Mate'
 subraumctl strichliste add 10 --comment 'cash deposit'
 subraumctl strichliste send 0.01 --comment 'test'
@@ -64,6 +65,17 @@ operation instead of producing an incomplete rank.
 prompts go to stderr. `--dry-run` performs no HTTP requests, including no user
 lookup: it previews values/comments, with recipient selection left unresolved.
 
+`transactions` shows the recent entries returned by your account's detail
+endpoint, newest transaction id first. It includes date, signed euro amount,
+pay/add or transfer label, and comment. Human output rounds amounts to cents;
+`--json strichliste transactions` preserves the full `value_eur` precision.
+The server controls how many recent entries it returns; this is not a full
+paginated history.
+
+Legacy transfer labels are inferred from the `to <name>: …` / `from <name>: …`
+comment convention and the amount's sign. The original comment is shown so that
+the recipient/sender and booking note remain visible.
+
 ## TUI
 
 With the same URL and account environment variables configured:
@@ -85,6 +97,13 @@ Balances default to two decimal places (for example `-2.42 EUR`), labelled
 balance or any transaction amounts. JSON/MCP results retain full precision.
 
 - Use **Up/Down**, then **Enter** to choose **Pay**, **Add credit**, or **Send**.
+- Choose **Transactions**, or press **t**, to view recent account transactions.
+  Use **Up/Down**, **PageUp/PageDown**, or **Home/End** to browse; **Enter** opens
+  the date, full-precision amount and complete comment (scroll with **Up/Down**).
+  **Enter/Esc** closes the detail dialog; **t/Esc/q** returns from history to
+  actions. **p** also toggles the history list's amount precision.
+  History shares the 10-second account refresh, **r** refresh, and post-write
+  refresh. Failed reads retain the last history labelled `(previous)`.
 - Pay/add prompt for a positive euro amount and an optional comment.
 - Send loads recipients once when opened, then filters names live as you type
   (case-insensitive). You can type while the list loads. Select a match with

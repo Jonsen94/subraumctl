@@ -215,6 +215,11 @@ impl ConnectionState {
 
 pub enum Popup {
     #[cfg(feature = "strichliste")]
+    StrichlisteTransaction {
+        transaction: crate::strichliste::Transaction,
+        scroll: u16,
+    },
+    #[cfg(feature = "strichliste")]
     StrichlisteError {
         message: String,
     },
@@ -1164,6 +1169,13 @@ impl App {
                     self.handle_strichliste_key(key);
                     return;
                 }
+                #[cfg(feature = "strichliste")]
+                (Section::Strichliste, KeyCode::Esc | KeyCode::Char('q'))
+                    if self.strichliste.show_transactions =>
+                {
+                    self.handle_strichliste_key(key);
+                    return;
+                }
                 (Section::WhiteLight, KeyCode::Char('w')) => {
                     self.white_light.focus = 0;
                     return;
@@ -1347,6 +1359,27 @@ impl App {
             Popup::StrichlisteError { message } => match key.code {
                 KeyCode::Esc | KeyCode::Enter => {}
                 _ => next = Some(Popup::StrichlisteError { message }),
+            },
+            #[cfg(feature = "strichliste")]
+            Popup::StrichlisteTransaction {
+                transaction,
+                mut scroll,
+            } => match key.code {
+                KeyCode::Esc | KeyCode::Enter => {}
+                _ => {
+                    match key.code {
+                        KeyCode::Up => scroll = scroll.saturating_sub(1),
+                        KeyCode::Down => scroll = scroll.saturating_add(1),
+                        KeyCode::PageUp => scroll = scroll.saturating_sub(10),
+                        KeyCode::PageDown => scroll = scroll.saturating_add(10),
+                        KeyCode::Home => scroll = 0,
+                        _ => {}
+                    }
+                    next = Some(Popup::StrichlisteTransaction {
+                        transaction,
+                        scroll,
+                    });
+                }
             },
             Popup::ColorPicker { mut picker } => match picker.handle_key(key) {
                 PickerOutcome::Changed => {

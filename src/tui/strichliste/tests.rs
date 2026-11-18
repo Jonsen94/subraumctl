@@ -96,6 +96,101 @@ fn options(url: String) -> Options {
 }
 
 #[test]
+fn transactions_menu_can_be_opened_offline_and_empty_history_is_distinct() {
+    let (mut app, mut rx, _) = app();
+    press(&mut app, KeyCode::End);
+    press(&mut app, KeyCode::Enter);
+    assert!(app.strichliste.show_transactions);
+    assert!(screen(&mut app).contains("Transactions not read"));
+    press(&mut app, KeyCode::Enter);
+    assert!(app.popup.is_none());
+    press(&mut app, KeyCode::Char('r'));
+    assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(Response::Account {
+            balance: Ok(0.0),
+            rank: Ok((1, 0.0)),
+            transactions: Ok(vec![]),
+        }),
+    });
+    assert!(screen(&mut app).contains("No recent transactions"));
+    press(&mut app, KeyCode::Esc);
+    assert!(!app.strichliste.show_transactions);
+    assert_eq!(app.section, Section::Strichliste);
+    press(&mut app, KeyCode::Char('t'));
+    assert!(app.strichliste.show_transactions);
+    press(&mut app, KeyCode::Char('q'));
+    assert!(!app.strichliste.show_transactions);
+    assert_eq!(app.section, Section::Strichliste);
+}
+
+#[tokio::test]
+async fn transaction_history_refreshes_preserves_selection_and_opens_full_details() {
+    let (mut app, mut rx, mut mqtt) = app();
+    let (url, http) = fixture::server(vec![(200, fixture::user()), (200, fixture::users())]);
+    let response = execute(options(url), &Command::Refresh, false)
+        .await
+        .unwrap();
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(response),
+    });
+    assert_eq!(http.join().unwrap().len(), 2); // History shares the balance read.
+    press(&mut app, KeyCode::Char('t'));
+    let text = screen(&mut app);
+    assert!(text.contains("Recent transactions"));
+    assert!(text.contains("Transfer in"));
+    press(&mut app, KeyCode::End);
+    assert_eq!(app.strichliste.transaction_selection.selected(), Some(3));
+    assert!(screen(&mut app).contains("-1.23"));
+    press(&mut app, KeyCode::Char('p'));
+    assert!(screen(&mut app).contains("-1.2345"));
+    press(&mut app, KeyCode::Home);
+    press(&mut app, KeyCode::Down);
+    press(&mut app, KeyCode::Enter);
+    let text = screen(&mut app);
+    for expected in [
+        "Transfer out",
+        "to Other: test",
+        "-0.01 EUR (full precision)",
+    ] {
+        assert!(text.contains(expected), "missing {expected}");
+    }
+    press(&mut app, KeyCode::Esc);
+    assert!(app.strichliste.show_transactions);
+    let mut transactions = app.strichliste.transactions.clone().unwrap();
+    let mut newest = transactions[0].clone();
+    newest.id = 105;
+    transactions.insert(0, newest);
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(Response::Account {
+            balance: Ok(12.355),
+            rank: Ok((2, 10.5)),
+            transactions: Ok(transactions),
+        }),
+    });
+    assert_eq!(app.strichliste.transaction_selection.selected(), Some(2)); // Still id 103.
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(Response::Account {
+            balance: Ok(12.355),
+            rank: Ok((2, 10.5)),
+            transactions: Err("offline".into()),
+        }),
+    });
+    assert_eq!(app.strichliste.transactions.as_ref().unwrap().len(), 5);
+    assert!(app.strichliste.transactions_stale);
+    assert!(screen(&mut app).contains("(previous)"));
+    app.options.connect = true;
+    app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(11));
+    app.on_tick();
+    assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
+    assert!(mqtt.try_recv().is_err());
+}
+
+#[test]
 fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
     for (focus, pay) in [(0, true), (1, false)] {
         let (mut app, mut rx, mut mqtt) = app();
@@ -340,6 +435,7 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
         result: Ok(Response::Account {
             balance: Ok(12.345),
             rank: Ok((2, 10.5)),
+            transactions: Ok(vec![]),
         }),
     });
     let text = screen(&mut app);
@@ -369,6 +465,7 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
         result: Ok(Response::Account {
             balance: Err("offline".into()),
             rank: Err("offline".into()),
+            transactions: Err("offline".into()),
         }),
     });
     assert_eq!(app.strichliste.balance, Some(12.345));
@@ -404,7 +501,8 @@ async fn background_worker_reads_balance_rank_and_dry_run_never_connects() {
         event.result,
         Ok(Response::Account {
             balance: Ok(12.345),
-            rank: Ok((2, 10.5))
+            rank: Ok((2, 10.5)),
+            transactions: Ok(_),
         })
     ));
     assert!(replies.recv().await.is_none());
@@ -458,6 +556,7 @@ fn auto_refresh_runs_every_ten_seconds_only_when_the_tab_is_idle_and_visible() {
         result: Ok(Response::Account {
             balance: Ok(1.0),
             rank: Ok((1, 1.0)),
+            transactions: Ok(vec![]),
         }),
     });
     app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(9));

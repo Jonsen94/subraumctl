@@ -11,9 +11,11 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 use super::app::{App, Popup, Section, StatusKind};
 use super::safe_mode::{ConfirmChoice, PendingCommand};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
-use crate::strichliste::{Client, Options, Request, User, parse_amount, validate_amount};
+use crate::strichliste::{
+    Client, Options, Request, Transaction, User, parse_amount, validate_amount,
+};
 
-pub const ACTIONS: [&str; 3] = ["Pay", "Add credit", "Send to another user"];
+pub const ACTIONS: [&str; 4] = ["Pay", "Add credit", "Send to another user", "Transactions"];
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug)]
@@ -47,7 +49,9 @@ impl Command {
 
     pub fn preview_lines(&self) -> Vec<String> {
         match self {
-            Self::Refresh => vec!["Read your balance and purchase rank".into()],
+            Self::Refresh => {
+                vec!["Read your balance, purchase rank and recent transactions".into()]
+            }
             Self::LoadRecipients => vec!["Load recipients for live search".into()],
             Self::Book { request, comment } => vec![
                 match request {
@@ -77,6 +81,7 @@ pub enum Response {
     Account {
         balance: Result<f64, String>,
         rank: Result<(u64, f64), String>,
+        transactions: Result<Vec<Transaction>, String>,
     },
     Recipients(Vec<User>),
     Submitted,
@@ -163,6 +168,10 @@ pub struct State {
     pub rank: Option<(u64, f64)>,
     pub balance_stale: bool,
     pub rank_stale: bool,
+    pub transactions: Option<Vec<Transaction>>,
+    pub transactions_stale: bool,
+    pub show_transactions: bool,
+    pub transaction_selection: ListState,
     pub busy: bool,
     pub last_refresh: Option<Instant>,
     pub full_precision: bool,
@@ -179,15 +188,13 @@ async fn execute(options: Options, command: &Command, dry_run: bool) -> Result<R
     let client = Client::new(options)?;
     match command {
         Command::Refresh => {
-            let balance = client
-                .execute(&Request::Balance, "")
-                .await
-                .and_then(|value| {
-                    value["balance_eur"]
-                        .as_f64()
-                        .ok_or_else(|| eyre!("missing balance"))
-                })
-                .map_err(|error| error.to_string());
+            let (balance, transactions) = match client.account_snapshot().await {
+                Ok(account) => (
+                    account.balance.map_err(|error| error.to_string()),
+                    account.transactions.map_err(|error| error.to_string()),
+                ),
+                Err(error) => (Err(error.to_string()), Err(error.to_string())),
+            };
             let rank = client
                 .execute(&Request::Rank, "")
                 .await
@@ -202,7 +209,11 @@ async fn execute(options: Options, command: &Command, dry_run: bool) -> Result<R
                     ))
                 })
                 .map_err(|error| error.to_string());
-            Ok(Response::Account { balance, rank })
+            Ok(Response::Account {
+                balance,
+                rank,
+                transactions,
+            })
         }
         Command::LoadRecipients => {
             let current = client.current_user().await?;
@@ -270,6 +281,52 @@ impl App {
     }
 
     pub(super) fn handle_strichliste_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Char('t') {
+            self.strichliste.show_transactions = !self.strichliste.show_transactions;
+            return;
+        }
+        if self.strichliste.show_transactions {
+            let count = self.strichliste.transactions.as_ref().map_or(0, Vec::len);
+            let selected = self
+                .strichliste
+                .transaction_selection
+                .selected()
+                .unwrap_or(0);
+            let index = match key.code {
+                KeyCode::Up => selected.saturating_sub(1),
+                KeyCode::Down => (selected + 1).min(count.saturating_sub(1)),
+                KeyCode::PageUp => selected.saturating_sub(10),
+                KeyCode::PageDown => (selected + 10).min(count.saturating_sub(1)),
+                KeyCode::Home => 0,
+                KeyCode::End => count.saturating_sub(1),
+                _ => selected,
+            };
+            self.strichliste
+                .transaction_selection
+                .select((count > 0).then_some(index));
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => self.strichliste.show_transactions = false,
+                KeyCode::Char('r') => self.send_strichliste(Command::Refresh),
+                KeyCode::Char('p') => {
+                    self.strichliste.full_precision = !self.strichliste.full_precision
+                }
+                KeyCode::Enter => {
+                    if let Some(transaction) = self
+                        .strichliste
+                        .transactions
+                        .as_ref()
+                        .and_then(|items| items.get(index))
+                    {
+                        self.popup = Some(Popup::StrichlisteTransaction {
+                            transaction: transaction.clone(),
+                            scroll: 0,
+                        });
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
         match key.code {
             KeyCode::Up => {
                 self.strichliste.focus =
@@ -283,6 +340,10 @@ impl App {
                 self.strichliste.full_precision = !self.strichliste.full_precision
             }
             KeyCode::Enter if !self.strichliste.busy => {
+                if self.strichliste.focus == 3 {
+                    self.strichliste.show_transactions = true;
+                    return;
+                }
                 let kind = match self.strichliste.focus {
                     0 => Kind::Pay,
                     1 => Kind::Add,
@@ -431,6 +492,7 @@ impl App {
         if !self.options.dry_run && matches!(command, Command::Book { .. } | Command::Send { .. }) {
             self.strichliste.balance_stale = true;
             self.strichliste.rank_stale = true;
+            self.strichliste.transactions_stale = true;
         }
         self.strichliste.busy = true;
         self.strichliste.error = None;
@@ -453,10 +515,35 @@ impl App {
         self.strichliste.error = None;
         let mut refresh = false;
         let message = match event.result {
-            Ok(Response::Account { balance, rank }) => {
+            Ok(Response::Account {
+                balance,
+                rank,
+                transactions,
+            }) => {
                 let mut errors = Vec::new();
                 self.strichliste.balance_stale = balance.is_err();
                 self.strichliste.rank_stale = rank.is_err();
+                self.strichliste.transactions_stale = transactions.is_err();
+                match transactions {
+                    Ok(transactions) => {
+                        let previous_id = self
+                            .strichliste
+                            .transaction_selection
+                            .selected()
+                            .and_then(|index| self.strichliste.transactions.as_ref()?.get(index))
+                            .map(|transaction| transaction.id);
+                        let selected = previous_id
+                            .and_then(|id| {
+                                transactions
+                                    .iter()
+                                    .position(|transaction| transaction.id == id)
+                            })
+                            .or_else(|| (!transactions.is_empty()).then_some(0));
+                        self.strichliste.transaction_selection.select(selected);
+                        self.strichliste.transactions = Some(transactions);
+                    }
+                    Err(error) => errors.push(error),
+                }
                 match balance {
                     Ok(value) => self.strichliste.balance = Some(value),
                     Err(error) => errors.push(error),
@@ -505,6 +592,7 @@ impl App {
                 if matches!(event.command, Command::Refresh) {
                     self.strichliste.balance_stale = true;
                     self.strichliste.rank_stale = true;
+                    self.strichliste.transactions_stale = true;
                 }
                 if let Some(form) = &mut self.strichliste.form {
                     if form.step == Step::Loading {
@@ -554,6 +642,16 @@ impl App {
             return;
         }
         let row = mouse.row.saturating_sub(list.y + 1) as usize;
+        if self.strichliste.show_transactions {
+            let index = self.strichliste.transaction_selection.offset() + row;
+            if index < self.strichliste.transactions.as_ref().map_or(0, Vec::len) {
+                self.strichliste.transaction_selection.select(Some(index));
+                if double_click {
+                    self.handle_strichliste_key(KeyEvent::from(KeyCode::Enter));
+                }
+            }
+            return;
+        }
         if let Some(form) = &mut self.strichliste.form {
             if form.step != Step::Recipients {
                 return;

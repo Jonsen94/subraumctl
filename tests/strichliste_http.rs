@@ -21,6 +21,134 @@ fn body(request: &str) -> Value {
 }
 
 #[tokio::test]
+async fn account_history_is_own_recent_transactions_in_euros_newest_first() {
+    let mut user = fixture::user();
+    user["transactions"].as_array_mut().unwrap().reverse();
+    let (url, server) = fixture::server(vec![(200, fixture::users()), (200, user)]);
+    let mut opts = options(url);
+    opts.user_id = None;
+    opts.user = Some("Me".into());
+    let account = Client::new(opts).unwrap().account_snapshot().await.unwrap();
+    assert_eq!(account.balance.unwrap(), 12.345);
+    let transactions = account.transactions.unwrap();
+    assert_eq!(
+        transactions.iter().map(|item| item.id).collect::<Vec<_>>(),
+        [104, 103, 102, 101]
+    );
+    assert_eq!(
+        transactions
+            .iter()
+            .map(|item| item.kind())
+            .collect::<Vec<_>>(),
+        ["Transfer in", "Transfer out", "Add credit", "Pay"]
+    );
+    assert_eq!(transactions[1].value_eur, -0.01);
+    assert_eq!(transactions[3].value_eur, -1.2345);
+    assert!(transactions[3].comment.is_none());
+    let requests = server.join().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[1].starts_with("GET /strich-api/user/27 "));
+}
+
+#[tokio::test]
+async fn bad_history_does_not_hide_balance_or_leak_other_accounts() {
+    for (field, invalid) in [
+        ("userId", json!(30)),
+        ("value", json!("NaN")),
+        ("createDate", Value::Null),
+        ("comment", json!({"private": "PRIVATE"})),
+        ("id", json!(103)),
+    ] {
+        let mut user = fixture::user();
+        user["transactions"][0][field] = invalid;
+        let (url, server) = fixture::server(vec![(200, user)]);
+        let account = Client::new(options(url))
+            .unwrap()
+            .account_snapshot()
+            .await
+            .unwrap();
+        assert_eq!(account.balance.unwrap(), 12.345);
+        let error = account.transactions.unwrap_err().to_string();
+        assert!(!error.contains("PRIVATE"));
+        assert_eq!(server.join().unwrap().len(), 1);
+    }
+    for (history, valid) in [(json!([]), true), (Value::Null, false)] {
+        let mut user = fixture::user();
+        user["transactions"] = history;
+        let (url, server) = fixture::server(vec![(200, user)]);
+        let account = Client::new(options(url))
+            .unwrap()
+            .account_snapshot()
+            .await
+            .unwrap();
+        assert_eq!(account.transactions.is_ok(), valid);
+        server.join().unwrap();
+    }
+    let mut user = fixture::user();
+    user["id"] = json!(30);
+    let (url, server) = fixture::server(vec![(200, user)]);
+    assert!(
+        Client::new(options(url))
+            .unwrap()
+            .account_snapshot()
+            .await
+            .is_err()
+    );
+    server.join().unwrap();
+}
+
+#[test]
+fn cli_transactions_projects_history_and_supports_offline_preview() {
+    for json_output in [true, false] {
+        let (url, server) = fixture::server(vec![(200, fixture::user())]);
+        let mut command = Command::new(env!("CARGO_BIN_EXE_subraumctl"));
+        command.args(["--strichliste-url", &url, "--strichliste-user-id", "27"]);
+        if json_output {
+            command.arg("--json");
+        }
+        let output = command
+            .args(["strichliste", "transactions"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(!text.contains("DO NOT EXPOSE"));
+        if json_output {
+            let value: Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(value["transactions"].as_array().unwrap().len(), 4);
+            assert_eq!(value["transactions"][3]["value_eur"], -1.2345);
+            assert_eq!(value["transactions"][0]["comment"], "from Other: test");
+            assert!(value.get("balance").is_none());
+        } else {
+            for expected in [
+                "Transfer in",
+                "Transfer out",
+                "Add credit",
+                "Pay",
+                "-1.23 EUR",
+                "to Other: test",
+            ] {
+                assert!(text.contains(expected), "{text}");
+            }
+        }
+        assert_eq!(server.join().unwrap().len(), 1);
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+        .args(["--dry-run", "--json", "strichliste", "transactions"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+        json!({"dry_run": true})
+    );
+}
+
+#[tokio::test]
 async fn euro_amounts_keep_fractional_cents_and_use_one_transaction_post() {
     for (request, expected) in [
         (Request::Pay(0.01), -0.01),

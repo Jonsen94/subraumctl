@@ -147,6 +147,51 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             );
             draw_input(frame, parts[1], &form.input, label, &app.theme, focused);
         }
+    } else if state.show_transactions {
+        let title = if state.transactions_stale {
+            "Recent transactions · EUR (previous)"
+        } else {
+            "Recent transactions · EUR"
+        };
+        match &state.transactions {
+            Some(transactions) if !transactions.is_empty() => {
+                let items: Vec<_> = transactions
+                    .iter()
+                    .map(|transaction| {
+                        let amount = if state.full_precision {
+                            format!("{:+}", transaction.value_eur)
+                        } else {
+                            format!("{:+.2}", transaction.value_eur)
+                        };
+                        ListItem::new(format!(
+                            "{}  {amount}  {}",
+                            transaction.created_at.escape_debug(),
+                            transaction.kind(),
+                        ))
+                    })
+                    .collect();
+                frame.render_stateful_widget(
+                    List::new(items)
+                        .block(panel(title))
+                        .highlight_symbol("> ")
+                        .highlight_style(selection_style(&app.theme)),
+                    rows[2],
+                    &mut state.transaction_selection,
+                );
+            }
+            transactions => {
+                frame.render_widget(
+                    Paragraph::new(if transactions.is_some() {
+                        "No recent transactions."
+                    } else {
+                        "Transactions not read. Press r to refresh."
+                    })
+                    .wrap(Wrap { trim: false })
+                    .block(panel(title)),
+                    rows[2],
+                );
+            }
+        }
     } else {
         frame.render_stateful_widget(
             List::new(ACTIONS)
@@ -158,12 +203,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
         );
     }
     frame.render_widget(
-        Paragraph::new(if state.form.is_some() {
+        Paragraph::new(if state.show_transactions {
+            "Enter details · r refresh · p precision · t/Esc back"
+        } else if state.form.is_some() {
             "Enter next/submit · Esc cancel · Ctrl+C quit"
         } else if app.options.connect {
-            "Auto 10s · r refresh · p precision · Enter activate"
+            "Auto 10s · r refresh · p precision · t history"
         } else {
-            "Auto off · r refresh · p precision · Enter activate"
+            "Auto off · r refresh · p precision · t history"
         }),
         rows[3],
     );

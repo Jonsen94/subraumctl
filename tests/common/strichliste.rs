@@ -9,7 +9,13 @@ use std::{
 
 pub fn user() -> Value {
     json!({"id": 27, "name": "Me", "balance": 12.345,
-        "weightedCountOfPurchases": 10.5, "private": "DO NOT EXPOSE"})
+    "weightedCountOfPurchases": 10.5, "private": "DO NOT EXPOSE",
+    "transactions": [
+        {"id": 104, "userId": 27, "createDate": "2026-11-18 18:45:22", "value": 0.01, "comment": "from Other: test"},
+        {"id": 103, "userId": 27, "createDate": "2026-11-18 18:44:22", "value": -0.01, "comment": "to Other: test"},
+        {"id": 102, "userId": 27, "createDate": "2026-11-18 18:43:22", "value": 10, "comment": "cash"},
+        {"id": 101, "userId": 27, "createDate": "2026-11-18 18:42:22", "value": -1.2345, "comment": null}
+    ]})
 }
 
 pub fn users() -> Value {
