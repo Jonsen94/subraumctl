@@ -3,6 +3,7 @@
 use super::Domain;
 use crate::{history, influx::Options};
 use eyre::Result;
+use std::cell::RefCell;
 
 #[cfg(test)]
 pub use history::query;
@@ -20,6 +21,9 @@ pub struct History {
     pub end_ms: u64,
     pub bucket_ms: u64,
     pub series: Vec<Series>,
+    // A history snapshot is immutable after conversion. Replacing it also drops
+    // its plot cache, including when two reads have the same end timestamp.
+    pub(super) plot: RefCell<Option<super::view::PlotCache>>,
 }
 
 impl From<history::History> for History {
@@ -28,6 +32,7 @@ impl From<history::History> for History {
             minutes: history.minutes,
             end_ms: history.end_ms,
             bucket_ms: history.bucket_ms,
+            plot: RefCell::new(None),
             series: history
                 .series
                 .into_iter()

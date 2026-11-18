@@ -53,6 +53,10 @@ query's end, whose age is shown; y-axes auto-scale. Only the active graph view p
 (every 30 seconds). `--no-connect` disables automatic polling; graph selection,
 range changes, and Enter still request data. `--dry-run` skips HTTP entirely.
 
+Plots are cached between data or view changes; timer ticks update status/age
+labels without rebuilding the curves. Missing-data segments share one rendering
+layer per room, so sparse history does not allocate a full plot for every gap.
+
 Failed reads keep the previous graph labeled **STALE**, retaining its actual range.
 While a changed window loads, the requested window and displayed range are labeled
 separately. Old-window responses are discarded before loading the new window.
@@ -135,3 +139,10 @@ converted to watts in the snapshot and history decoders.
 and malformed data, query modes, CLI output, TUI mode changes/refresh/failures,
 and MCP argument validation, dry runs and permissions. Tests do not require a
 connection to the space's InfluxDB.
+
+The isolated rendering benchmark compares continuous and gap-heavy series at
+three terminal sizes against the previous per-segment dataset renderer:
+
+```sh
+cargo test --release --lib benchmark_gap_rendering -- --ignored --nocapture
+```

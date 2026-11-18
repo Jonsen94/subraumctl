@@ -316,3 +316,76 @@ fn graph_options_are_tui_only_and_validate_range() {
         Cli::try_parse_from(["subraumctl", "power", "status", "--graph-minutes", "60"]).is_err()
     );
 }
+
+#[test]
+fn cached_plots_ignore_ticks_but_follow_view_and_snapshot_changes() {
+    let (mut app, _) = app(false);
+    app.graphs.power.history = Some(history::decode(&fixture(), Domain::Power, 1, 60_000).unwrap());
+    let renders = |app: &App| {
+        app.graphs
+            .power
+            .history
+            .as_ref()
+            .unwrap()
+            .plot
+            .borrow()
+            .as_ref()
+            .map_or(0, |plot| plot.renders)
+    };
+    let mut terminal = Terminal::new(TestBackend::new(120, 46)).unwrap();
+    let draw = |terminal: &mut Terminal<TestBackend>, app: &App| {
+        terminal
+            .draw(|f| super::draw(f, f.area(), app, Domain::Power))
+            .unwrap();
+    };
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 1);
+    for _ in 0..20 {
+        app.on_tick();
+        draw(&mut terminal, &app);
+    }
+    app.graphs.power.busy = true;
+    draw(&mut terminal, &app);
+    app.graphs.power.busy = false;
+    app.graphs.power.error = Some("offline".into());
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 1, "status updates must reuse the plot");
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect();
+    assert!(text.contains("STALE"), "status must still update");
+
+    app.graphs.power.layout = GraphLayout::Separate;
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 2);
+    app.graphs.power.scroll = 1;
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 3);
+    app.theme = Theme::preset(ThemePreset::HighContrast);
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 4);
+    let mut terminal = Terminal::new(TestBackend::new(160, 60)).unwrap();
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 5);
+    app.graphs.power.humidity = true;
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 6);
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect();
+    assert!(text.contains("No history returned"));
+
+    // A replacement snapshot invalidates even if its timestamp is identical.
+    app.graphs.power.history = Some(history::decode(&fixture(), Domain::Power, 1, 60_000).unwrap());
+    assert_eq!(renders(&app), 0);
+    draw(&mut terminal, &app);
+    assert_eq!(renders(&app), 1);
+}
