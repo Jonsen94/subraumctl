@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# Serialize retries for a commit without cancelling releases for other commits.
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    outputs:
+      # Both matrix jobs calculate the same version from the same commit.
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake pkg-config libssl-dev
+
+      - name: Install pinned Rust toolchain
+        run: |
+          toolchain="$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
+          rustup toolchain install "$toolchain" --profile minimal
+          rustup target add --toolchain "$toolchain" "$TARGET"
+        env:
+          TARGET: ${{ matrix.target }}
+
+      - name: Set release version
+        id: version
+        run: |
+          version="$(python3 .github/scripts/release-version.py "$GITHUB_SHA")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build and test release
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cargo build --locked --release --target "$TARGET"
+          cargo test --locked --release --target "$TARGET"
+          test "$(target/"$TARGET"/release/subraumctl --version)" = "subraumctl $RELEASE_VERSION"
+
+      - name: Package release
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          package="subraumctl-$RELEASE_VERSION-$TARGET"
+          mkdir -p "dist/$package"
+          install -m 755 "target/$TARGET/release/subraumctl" "dist/$package/subraumctl"
+          cp README.md "dist/$package/"
+          tar -C dist -czf "dist/$package.tar.gz" "$package"
+          rm -r "dist/$package"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish GitHub prerelease
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish archives and checksums
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tag="v$RELEASE_VERSION"
+          sha256sum ./*.tar.gz > SHA256SUMS
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "subraumctl $RELEASE_VERSION" \
+              --notes "Automatic master build from commit $GITHUB_SHA. Linux x86_64 and aarch64 binaries, built on Ubuntu 24.04 with default features. Requires glibc 2.39 or newer and OpenSSL 3." \
+              --prerelease --draft --latest=false
+          fi
+          gh release upload "$tag" ./*.tar.gz SHA256SUMS --clobber
+          gh release edit "$tag" --draft=false --prerelease --latest=false
