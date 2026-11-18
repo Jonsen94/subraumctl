@@ -405,6 +405,26 @@ fn draw_popups(frame: &mut Frame, area: Rect, app: &App) {
                 .collect::<Vec<Line<'static>>>();
             render_popup(frame, area, "Message detail", lines, 72, 48, &app.theme);
         }
+        #[cfg(feature = "strichliste")]
+        Popup::StrichlisteError { message } => {
+            let lines = vec![
+                Line::from(Span::styled(
+                    message.clone(),
+                    Style::default().fg(app.theme.error),
+                )),
+                Line::from(""),
+                Line::from("Enter / Esc: close"),
+            ];
+            render_popup(
+                frame,
+                area,
+                "Strichliste transaction error",
+                lines,
+                90,
+                60,
+                &app.theme,
+            );
+        }
         Popup::ColorPicker { picker } => {
             views::theme::draw_picker(frame, centered_rect(75, 80, area), picker, &app.theme);
         }

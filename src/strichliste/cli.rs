@@ -13,12 +13,12 @@ pub async fn run(global: &GlobalArgs, command: StrichlisteCommand) -> Result<()>
         StrichlisteCommand::Pay { amount, comment } => (Request::Pay(amount), comment),
         StrichlisteCommand::Add { amount, comment } => (Request::Add(amount), comment),
         StrichlisteCommand::Send { amount, comment } => {
-            let value = -super::cents(amount)?;
+            let value = -super::validate_amount(amount)?;
             if global.dry_run {
                 return print(
                     global,
                     json!({
-                        "dry_run": true, "submitted": false, "value_cents": value,
+                        "dry_run": true, "submitted": false, "value_eur": value,
                         "recipient": "interactive selection", "comment": comment,
                     }),
                 );
@@ -141,10 +141,10 @@ fn print(global: &GlobalArgs, value: Value) -> Result<()> {
                 value["weighted_count_of_purchases"]
             );
         } else if value["submitted"] == true {
-            let cents = value["value_cents"]
+            let euros = value["value_eur"]
                 .as_f64()
                 .ok_or_else(|| eyre!("missing transaction value"))?;
-            println!("Booked: {} €", cents / 100.0);
+            println!("Booked: {euros} €");
         }
     }
     Ok(())

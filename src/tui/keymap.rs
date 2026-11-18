@@ -504,7 +504,7 @@ pub fn section_bindings(section: Section) -> &'static [KeyBinding] {
             },
             KeyBinding {
                 keys: "/",
-                action: "search recipients again",
+                action: "clear live recipient search",
             },
             KeyBinding {
                 keys: "Esc",

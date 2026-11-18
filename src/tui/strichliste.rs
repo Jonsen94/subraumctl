@@ -11,7 +11,7 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 use super::app::{App, Popup, Section, StatusKind};
 use super::safe_mode::{ConfirmChoice, PendingCommand};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
-use crate::strichliste::{Client, Options, Request, User, cents, parse_amount};
+use crate::strichliste::{Client, Options, Request, User, parse_amount, validate_amount};
 
 pub const ACTIONS: [&str; 3] = ["Pay", "Add credit", "Send to another user"];
 pub const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
@@ -19,7 +19,7 @@ pub const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 #[derive(Clone, Debug)]
 pub enum Command {
     Refresh,
-    Search(String),
+    LoadRecipients,
     Book {
         request: Request,
         comment: String,
@@ -38,10 +38,9 @@ impl Command {
                 ensure!(request.value()?.is_some(), "expected pay or add")
             }
             Self::Send { amount, .. } => {
-                cents(*amount)?;
+                validate_amount(*amount)?;
             }
-            Self::Search(query) => ensure!(!query.trim().is_empty(), "enter a recipient name"),
-            Self::Refresh => {}
+            Self::LoadRecipients | Self::Refresh => {}
         }
         Ok(())
     }
@@ -49,7 +48,7 @@ impl Command {
     pub fn preview_lines(&self) -> Vec<String> {
         match self {
             Self::Refresh => vec!["Read your balance and purchase rank".into()],
-            Self::Search(query) => vec![format!("Search recipients: {}", query.escape_debug())],
+            Self::LoadRecipients => vec!["Load recipients for live search".into()],
             Self::Book { request, comment } => vec![
                 match request {
                     Request::Pay(amount) => format!("Pay {amount} EUR from your balance"),
@@ -111,6 +110,7 @@ pub struct Form {
     pub input: Input,
     pub amount: Option<f64>,
     pub recipient: Option<User>,
+    pub all_recipients: Vec<User>,
     pub recipients: Vec<User>,
     pub selection: ListState,
 }
@@ -120,16 +120,30 @@ impl Form {
         Self {
             kind,
             step: if kind == Kind::Send {
-                Step::Search
+                Step::Loading
             } else {
                 Step::Amount
             },
             input: Input::default(),
             amount: None,
             recipient: None,
+            all_recipients: Vec::new(),
             recipients: Vec::new(),
             selection: ListState::default(),
         }
+    }
+
+    fn filter_recipients(&mut self) {
+        let query = self.input.value().trim().to_lowercase();
+        self.recipients = self
+            .all_recipients
+            .iter()
+            .filter(|user| user.name.to_lowercase().contains(&query))
+            .cloned()
+            .collect();
+        self.selection = ListState::default();
+        self.selection
+            .select((!self.recipients.is_empty()).then_some(0));
     }
 
     pub fn title(&self) -> &'static str {
@@ -190,14 +204,13 @@ async fn execute(options: Options, command: &Command, dry_run: bool) -> Result<R
                 .map_err(|error| error.to_string());
             Ok(Response::Account { balance, rank })
         }
-        Command::Search(query) => {
+        Command::LoadRecipients => {
             let current = client.current_user().await?;
-            let query = query.to_lowercase();
             let mut users: Vec<_> = client
                 .users()
                 .await?
                 .into_iter()
-                .filter(|user| user.id != current.id && user.name.to_lowercase().contains(&query))
+                .filter(|user| user.id != current.id)
                 .collect();
             users.sort_by(|a, b| {
                 a.name
@@ -277,6 +290,9 @@ impl App {
                 };
                 self.strichliste.form = Some(Form::new(kind));
                 self.strichliste.error = None;
+                if kind == Kind::Send {
+                    self.send_strichliste(Command::LoadRecipients);
+                }
             }
             _ => {}
         }
@@ -291,7 +307,9 @@ impl App {
             return;
         }
         match form.step {
-            Step::Loading => {}
+            Step::Loading => {
+                form.input.handle_event(&InputEvent::Key(key));
+            }
             Step::Recipients => {
                 let count = form.recipients.len();
                 let selected = form.selection.selected().unwrap_or(0);
@@ -307,28 +325,29 @@ impl App {
                 form.selection.select((count > 0).then_some(index));
                 match key.code {
                     KeyCode::Char('/') => {
-                        form.step = Step::Search;
                         form.input = Input::default();
+                        form.filter_recipients();
                     }
                     KeyCode::Enter if count > 0 => {
                         form.recipient = form.recipients.get(index).cloned();
                         form.step = Step::Amount;
                         form.input = Input::default();
                     }
-                    _ => {}
+                    _ => {
+                        let before = form.input.value().to_owned();
+                        form.input.handle_event(&InputEvent::Key(key));
+                        if form.input.value() != before {
+                            form.filter_recipients();
+                        }
+                    }
                 }
             }
             _ if key.code == KeyCode::Enter => match form.step {
                 Step::Search => {
-                    let query = form.input.value().trim().to_owned();
-                    if query.is_empty() {
-                        self.strichliste.error = Some("Enter a recipient name".into());
-                    } else {
-                        form.step = Step::Loading;
-                        self.strichliste.form = Some(form);
-                        self.send_strichliste(Command::Search(query));
-                        return;
-                    }
+                    form.step = Step::Loading;
+                    self.strichliste.form = Some(form);
+                    self.send_strichliste(Command::LoadRecipients);
+                    return;
                 }
                 Step::Amount => match parse_amount(form.input.value()) {
                     Ok(amount) => {
@@ -457,11 +476,11 @@ impl App {
                 if let Some(form) = &mut self.strichliste.form {
                     if form.step == Step::Loading {
                         form.step = Step::Recipients;
-                        form.selection.select((!users.is_empty()).then_some(0));
-                        form.recipients = users;
+                        form.all_recipients = users;
+                        form.filter_recipients();
                     }
                 }
-                "Select a recipient; / searches again".into()
+                "Type to filter recipients; Up/Down select, Enter continues".into()
             }
             Ok(Response::Submitted) => {
                 refresh = true;
@@ -476,6 +495,13 @@ impl App {
                 format!("dry-run: {}", event.command.preview_lines().join(" | "))
             }
             Err(error) => {
+                if matches!(event.command, Command::Book { .. } | Command::Send { .. })
+                    && self.popup.is_none()
+                {
+                    self.popup = Some(Popup::StrichlisteError {
+                        message: error.clone(),
+                    });
+                }
                 if matches!(event.command, Command::Refresh) {
                     self.strichliste.balance_stale = true;
                     self.strichliste.rank_stale = true;
@@ -519,7 +545,11 @@ impl App {
         double_click: bool,
     ) {
         let rows = super::views::strichliste::areas(area);
-        let list = rows[2];
+        let list = if self.strichliste.form.is_some() {
+            super::views::strichliste::search_areas(rows[2])[1]
+        } else {
+            rows[2]
+        };
         if mouse.row <= list.y || mouse.row >= list.bottom().saturating_sub(1) {
             return;
         }

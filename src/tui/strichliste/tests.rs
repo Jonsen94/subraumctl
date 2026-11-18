@@ -119,7 +119,10 @@ fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
         let Command::Book { request, comment } = rx.try_recv().unwrap() else {
             panic!("booking expected")
         };
-        assert_eq!(request.value().unwrap(), Some(if pay { -0.1 } else { 0.1 }));
+        assert_eq!(
+            request.value().unwrap(),
+            Some(if pay { -0.001 } else { 0.001 })
+        );
         assert_eq!(comment, "qQcdr?S[]");
         assert!(app.strichliste.busy);
         press(&mut app, KeyCode::Enter);
@@ -158,9 +161,11 @@ async fn recipient_search_excludes_self_then_transfers_once_with_the_supplied_co
     let (mut app, mut rx, _) = app();
     app.strichliste.focus = 2;
     press(&mut app, KeyCode::Enter);
-    type_text(&mut app, "o");
-    press(&mut app, KeyCode::Enter);
     let command = rx.try_recv().unwrap();
+    assert!(matches!(command, Command::LoadRecipients));
+    type_text(&mut app, "o");
+    assert_eq!(app.strichliste.form.as_ref().unwrap().input.value(), "o");
+    assert!(rx.try_recv().is_err());
     let (url, http) = fixture::server(vec![(200, fixture::user()), (200, fixture::users())]);
     let result = execute(options(url), &command, false).await.unwrap();
     app.handle_strichliste_event(Event {
@@ -169,6 +174,27 @@ async fn recipient_search_excludes_self_then_transfers_once_with_the_supplied_co
     });
     let form = app.strichliste.form.as_ref().unwrap();
     assert!(form.recipients.iter().all(|user| user.id != 27));
+    assert_eq!(form.recipients.len(), 2);
+    assert!(screen(&mut app).contains("live search"));
+    type_text(&mut app, "TH");
+    assert_eq!(app.strichliste.form.as_ref().unwrap().recipients.len(), 1);
+    assert!(screen(&mut app).contains("Other (id 30)"));
+    type_text(&mut app, "xyz");
+    assert!(app.strichliste.form.as_ref().unwrap().recipients.is_empty());
+    press(&mut app, KeyCode::Enter); // No match cannot advance.
+    assert!(matches!(
+        app.strichliste.form.as_ref().unwrap().step,
+        Step::Recipients
+    ));
+    assert!(screen(&mut app).contains("No matching recipients"));
+    for _ in 0..5 {
+        press(&mut app, KeyCode::Backspace);
+    }
+    assert_eq!(app.strichliste.form.as_ref().unwrap().recipients.len(), 2);
+    press(&mut app, KeyCode::Char('/'));
+    assert_eq!(app.strichliste.form.as_ref().unwrap().recipients.len(), 3);
+    type_text(&mut app, "o");
+    assert!(rx.try_recv().is_err()); // Filtering uses the loaded list, no per-key HTTP.
     // Alphabetic results: Lower, Other. Navigate to the intended account.
     press(&mut app, KeyCode::End);
     press(&mut app, KeyCode::Enter);
@@ -201,7 +227,7 @@ async fn recipient_search_excludes_self_then_transfers_once_with_the_supplied_co
     assert_eq!(
         body,
         json!({
-            "value": -1.0, "comment": "to Other: test", "toUserId": 30,
+            "value": -0.01, "comment": "to Other: test", "toUserId": 30,
             "toUserComment": "from Me: test",
         })
     );
@@ -213,11 +239,12 @@ fn cancelled_search_does_not_reopen_the_form_or_send_and_global_navigation_recov
     let (mut app, mut rx, _) = app();
     app.strichliste.focus = 2;
     press(&mut app, KeyCode::Enter);
+    let command = rx.try_recv().unwrap();
     type_text(&mut app, "qQcdr?S[]");
     assert!(!app.should_quit);
     assert!(rx.try_recv().is_err());
     press(&mut app, KeyCode::Enter);
-    let command = rx.try_recv().unwrap();
+    assert!(rx.try_recv().is_err());
     press(&mut app, KeyCode::Esc);
     app.handle_strichliste_event(Event {
         command,
@@ -233,6 +260,71 @@ fn cancelled_search_does_not_reopen_the_form_or_send_and_global_navigation_recov
     press(&mut app, KeyCode::Enter);
     app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
     assert!(app.should_quit);
+}
+
+#[tokio::test]
+async fn failed_pay_and_add_show_a_persistent_status_dialog_without_retrying() {
+    for focus in [0, 1] {
+        let (mut app, mut rx, _) = app();
+        book_form(&mut app, focus, "0.01", "");
+        press(&mut app, KeyCode::Char('y'));
+        let command = rx.try_recv().unwrap();
+        let (url, http) = fixture::server(vec![
+            (200, fixture::user()),
+            (400, json!({"error": "PRIVATE"})),
+        ]);
+        let error = execute(options(url), &command, false)
+            .await
+            .err()
+            .unwrap()
+            .to_string();
+        app.handle_strichliste_event(Event {
+            command,
+            result: Err(error),
+        });
+        assert!(matches!(app.popup, Some(Popup::StrichlisteError { .. })));
+        let text = screen(&mut app);
+        assert!(text.contains("Strichliste transaction error"));
+        assert!(text.contains("HTTP 400"));
+        assert!(!text.contains("PRIVATE"));
+        app.options.connect = true;
+        app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(11));
+        app.on_tick();
+        assert!(rx.try_recv().is_err());
+        assert!(matches!(app.popup, Some(Popup::StrichlisteError { .. })));
+        press(&mut app, KeyCode::Enter);
+        assert!(app.popup.is_none());
+        assert!(rx.try_recv().is_err());
+        assert_eq!(http.join().unwrap().len(), 2);
+    }
+}
+
+#[test]
+fn recipient_load_failure_preserves_query_and_allows_retry() {
+    let (mut app, mut rx, _) = app();
+    app.strichliste.focus = 2;
+    press(&mut app, KeyCode::Enter);
+    let command = rx.try_recv().unwrap();
+    type_text(&mut app, "Other");
+    app.handle_strichliste_event(Event {
+        command,
+        result: Err("offline".into()),
+    });
+    assert_eq!(
+        app.strichliste.form.as_ref().unwrap().input.value(),
+        "Other"
+    );
+    assert!(screen(&mut app).contains("Enter retries"));
+    press(&mut app, KeyCode::Enter);
+    assert!(matches!(rx.try_recv().unwrap(), Command::LoadRecipients));
+    type_text(&mut app, "x");
+    press(&mut app, KeyCode::Esc);
+    app.handle_strichliste_event(Event {
+        command: Command::LoadRecipients,
+        result: Ok(Response::Recipients(vec![])),
+    });
+    assert!(app.strichliste.form.is_none());
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]
@@ -328,7 +420,7 @@ async fn background_worker_reads_balance_rank_and_dry_run_never_connects() {
     );
     for command in [
         Command::Refresh,
-        Command::Search("someone".into()),
+        Command::LoadRecipients,
         Command::Book {
             request: Request::Pay(0.01),
             comment: "TUI".into(),

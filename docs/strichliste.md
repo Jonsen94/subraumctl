@@ -44,6 +44,8 @@ subraumctl strichliste pay 3.141592653589793
 
 Amounts are positive numeric **euros**. `pay` debits, `add` credits, and `send`
 debits your account and credits the selected recipient in a single API request.
+The API also uses euros: `pay 0.01` sends `"value": -0.01`, and `add 1` sends
+`"value": 1`. JSON write results and previews report the signed `value_eur`.
 Fractional cents are preserved as floating-point values, not rounded to two
 decimal places; `pi` is not a literal expression understood by the CLI.
 Zero, negative, non-finite and overflowing amounts are rejected before IO.
@@ -84,9 +86,11 @@ balance or any transaction amounts. JSON/MCP results retain full precision.
 
 - Use **Up/Down**, then **Enter** to choose **Pay**, **Add credit**, or **Send**.
 - Pay/add prompt for a positive euro amount and an optional comment.
-- Send prompts for part of a recipient's name. Select a match with
+- Send loads recipients once when opened, then filters names live as you type
+  (case-insensitive). You can type while the list loads. Select a match with
   **Up/Down**, **PageUp/PageDown**, **Home/End**, then **Enter**. Your own account is
-  excluded. **/** starts a new search. Then enter the amount and comment.
+  excluded. **Backspace** edits the search; **/** clears it. Then enter the amount
+  and comment. Failed loads can be retried with **Enter**.
 - **Esc** cancels a form without submitting. Text fields accept global shortcut
   characters as literal text; **Ctrl+C** still quits.
 - With the application's default safe mode enabled, a confirmation previews the
@@ -96,6 +100,8 @@ balance or any transaction amounts. JSON/MCP results retain full precision.
 Requests run in the background; repeated activation while busy does not enqueue
 duplicate payments. Successful writes refresh balance and rank. Failed reads
 keep previous values labelled `(previous)`. Unconfirmed writes are never retried.
+Transaction HTTP errors include the endpoint and status code.
+Failed transactions open a persistent error dialog; **Enter** or **Esc** closes it.
 `--dry-run` previews operations without HTTP or invented balances/search results.
 
 TUI payments use your comment and the existing safe-mode setting; the MCP write
@@ -110,8 +116,8 @@ The `strichliste` permission group defaults to `r`:
 |---|---|---|
 | `strichliste_balance` | `{}` | `balance_eur` |
 | `strichliste_rank` | `{}` | `rank`, `weighted_count_of_purchases` |
-| `strichliste_pay` | `{"amount":1.25}` | `submitted`, signed `value_cents` |
-| `strichliste_add` | `{"amount":10}` | `submitted`, signed `value_cents` |
+| `strichliste_pay` | `{"amount":1.25}` | `submitted`, signed `value_eur` |
+| `strichliste_add` | `{"amount":10}` | `submitted`, signed `value_eur` |
 
 Pay and add are **disabled by default**. Enable them with both:
 
@@ -150,17 +156,17 @@ The implementation uses the legacy `/user` routes, not the newer PHP API:
   configured HTTP timeout also bounds the complete list fetch.
 - `GET <base>/user/<id>`: one user object; `balance` is already in **euros** and
   is preserved without conversion or rounding.
-- `POST <base>/user/<id>/transaction`: JSON with `value` in **cents** and `comment`.
+- `POST <base>/user/<id>/transaction`: JSON with `value` in **euros** and `comment`.
   A successful 2xx response acknowledges the submission.
 
 Numeric balances and scores may also be returned as numeric strings.
 Rejected reads report the relative route and HTTP status without response bodies.
-Based on the provided deployed-server example, `pay 0.01` posts `value: -1`.
+The confirmed deployed-server units are euros: `pay 0.01` posts `value: -0.01`.
 A one-cent transfer from user 27 to user 30 uses:
 
 ```json
 {
-  "value": -1,
+  "value": -0.01,
   "comment": "to Other: test",
   "toUserId": 30,
   "toUserComment": "from Me: test"
@@ -172,4 +178,5 @@ two-transaction transfer fallback. Automatic retries and redirects are disabled.
 On an unconfirmed submission, check the account before retrying.
 
 Tests use local HTTP fixtures, the supplied user-list wrapper and balance sample,
-and the earlier transfer contract. The private deployment has not been contacted.
+and the confirmed euro-valued transfer contract. The private deployment has not
+been contacted.

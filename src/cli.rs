@@ -968,7 +968,7 @@ mod tests {
     #[cfg(feature = "strichliste")]
     #[test]
     fn strichliste_requires_positive_amounts_and_unambiguous_account_options() {
-        for amount in ["0", "-1", "NaN", "inf", "1e308", "pi"] {
+        for amount in ["0", "-1", "NaN", "inf", "1e309", "pi"] {
             assert!(Cli::try_parse_from(["subraumctl", "strichliste", "pay", amount]).is_err());
         }
         let cli = Cli::try_parse_from([

@@ -23,12 +23,12 @@ fn body(request: &str) -> Value {
 #[tokio::test]
 async fn euro_amounts_keep_fractional_cents_and_use_one_transaction_post() {
     for (request, expected) in [
-        (Request::Pay(0.01), -1.0),
-        (Request::Add(0.01), 1.0),
-        (
-            Request::Pay(std::f64::consts::PI),
-            -std::f64::consts::PI * 100.0,
-        ),
+        (Request::Pay(0.01), -0.01),
+        (Request::Add(0.01), 0.01),
+        (Request::Pay(1.0), -1.0),
+        (Request::Add(1.0), 1.0),
+        (Request::Pay(0.001), -0.001),
+        (Request::Pay(std::f64::consts::PI), -std::f64::consts::PI),
     ] {
         let (url, server) = fixture::server(vec![(200, fixture::user()), (201, fixture::users())]);
         let result = Client::new(options(url))
@@ -36,7 +36,7 @@ async fn euro_amounts_keep_fractional_cents_and_use_one_transaction_post() {
             .execute(&request, "test")
             .await
             .unwrap();
-        assert_eq!(result, json!({"submitted": true, "value_cents": expected}));
+        assert_eq!(result, json!({"submitted": true, "value_eur": expected}));
         let requests = server.join().unwrap();
         assert!(requests[0].starts_with("GET /strich-api/user/27 "));
         assert!(requests[1].starts_with("POST /strich-api/user/27/transaction "));
@@ -62,7 +62,7 @@ async fn transfer_matches_the_supplied_contract() {
     assert_eq!(
         body(&requests[2]),
         json!({
-            "value": -1.0, "comment": "to Other: test", "toUserId": 30,
+            "value": -0.01, "comment": "to Other: test", "toUserId": 30,
             "toUserComment": "from Me: test",
         })
     );
@@ -214,7 +214,7 @@ async fn mcp_writes_force_the_audit_comment_and_hide_transaction_response() {
         let result = execute_mcp(options(url), &request, false).await.unwrap();
         assert_eq!(
             result,
-            json!({"submitted": true, "value_cents": request.value().unwrap()})
+            json!({"submitted": true, "value_eur": request.value().unwrap()})
         );
         let requests = server.join().unwrap();
         assert_eq!(body(&requests[1])["comment"], "triggered by mcp");
@@ -288,7 +288,7 @@ async fn null_purchase_scores_count_as_zero_and_malformed_scores_still_fail() {
 
 #[tokio::test]
 async fn invalid_amounts_dry_run_and_errors_never_leak_raw_data() {
-    for amount in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::MAX] {
+    for amount in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(
             execute_mcp(
                 options("invalid://unused".into()),
@@ -308,7 +308,7 @@ async fn invalid_amounts_dry_run_and_errors_never_leak_raw_data() {
     .unwrap();
     assert_eq!(
         preview,
-        json!({"dry_run": true, "submitted": false, "value_cents": 1.0, "comment": "triggered by mcp"})
+        json!({"dry_run": true, "submitted": false, "value_eur": 0.01, "comment": "triggered by mcp"})
     );
     for status in [302, 400, 500] {
         let (url, server) = fixture::server(vec![
@@ -321,7 +321,42 @@ async fn invalid_amounts_dry_run_and_errors_never_leak_raw_data() {
             .await
             .unwrap_err();
         assert!(!error.to_string().contains("PRIVATE"));
+        assert!(error.to_string().contains("POST /user/27/transaction"));
+        assert!(error.to_string().contains(&format!("HTTP {status}")));
         assert_eq!(server.join().unwrap().len(), 2);
+    }
+}
+
+#[test]
+fn cli_bookings_send_euros_and_print_the_same_amount() {
+    for (verb, expected) in [("pay", -1.25), ("add", 1.25)] {
+        let (url, server) = fixture::server(vec![(200, fixture::user()), (201, json!({}))]);
+        let output = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+            .args([
+                "--strichliste-url",
+                &url,
+                "--strichliste-user-id",
+                "27",
+                "strichliste",
+                verb,
+                "1.25",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().trim(),
+            format!("Booked: {expected} €")
+        );
+        let requests = server.join().unwrap();
+        assert_eq!(
+            body(&requests[1]),
+            json!({"value": expected, "comment": ""})
+        );
     }
 }
 
@@ -358,7 +393,7 @@ fn cli_live_balance_offline_previews_and_noninteractive_send() {
         assert!(output.status.success());
         let value: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(value["submitted"], false);
-        assert_eq!(value["value_cents"], if verb == "add" { 1.0 } else { -1.0 });
+        assert_eq!(value["value_eur"], if verb == "add" { 0.01 } else { -0.01 });
     }
     let output = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
         .args(["strichliste", "send", "1"])

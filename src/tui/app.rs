@@ -214,6 +214,10 @@ impl ConnectionState {
 }
 
 pub enum Popup {
+    #[cfg(feature = "strichliste")]
+    StrichlisteError {
+        message: String,
+    },
     Quit {
         selected: ConfirmChoice,
     },
@@ -1338,6 +1342,11 @@ impl App {
             Popup::TrafficDetail { entry } => match key.code {
                 KeyCode::Esc | KeyCode::Enter => {}
                 _ => next = Some(Popup::TrafficDetail { entry }),
+            },
+            #[cfg(feature = "strichliste")]
+            Popup::StrichlisteError { message } => match key.code {
+                KeyCode::Esc | KeyCode::Enter => {}
+                _ => next = Some(Popup::StrichlisteError { message }),
             },
             Popup::ColorPicker { mut picker } => match picker.handle_key(key) {
                 PickerOutcome::Changed => {

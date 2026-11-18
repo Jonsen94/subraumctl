@@ -21,6 +21,13 @@ pub(crate) fn areas(area: Rect) -> std::rc::Rc<[Rect]> {
         .split(area)
 }
 
+pub(crate) fn search_areas(area: Rect) -> std::rc::Rc<[Rect]> {
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(3)])
+        .split(area)
+}
+
 pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     let rows = areas(area);
     let state = &mut app.strichliste;
@@ -75,35 +82,46 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     );
 
     if let Some(form) = &mut state.form {
-        if form.step == Step::Recipients {
+        if matches!(form.step, Step::Search | Step::Loading | Step::Recipients) {
+            let parts = search_areas(rows[2]);
+            draw_input(
+                frame,
+                parts[0],
+                &form.input,
+                "Recipient name · live search",
+                &app.theme,
+                focused,
+            );
             let items: Vec<_> = form
                 .recipients
                 .iter()
                 .map(|user| ListItem::new(format!("{} (id {})", user.name.escape_debug(), user.id)))
                 .collect();
-            if items.is_empty() {
+            if form.step != Step::Recipients || items.is_empty() {
                 frame.render_widget(
-                    Paragraph::new("No matches. Press / to search again.")
-                        .block(panel("Recipients")),
-                    rows[2],
+                    Paragraph::new(match form.step {
+                        Step::Loading => "Loading recipients… You can type while waiting.",
+                        Step::Search => "Recipients not loaded. Enter retries; Esc cancels.",
+                        _ => "No matching recipients. Edit the search or / to clear.",
+                    })
+                    .block(panel("Recipients")),
+                    parts[1],
                 );
             } else {
                 frame.render_stateful_widget(
                     List::new(items)
-                        .block(panel("Recipients: Enter selects, / searches again"))
+                        .block(panel("Recipients · Up/Down select · Enter continues"))
                         .highlight_symbol("> ")
                         .highlight_style(selection_style(&app.theme)),
-                    rows[2],
+                    parts[1],
                     &mut form.selection,
                 );
             }
         } else {
             let label = match form.step {
-                Step::Search => "Recipient name",
-                Step::Loading => "Searching recipients...",
                 Step::Amount => "Amount in EUR",
                 Step::Comment => "Comment (optional; Enter submits)",
-                Step::Recipients => unreachable!(),
+                _ => unreachable!(),
             };
             let parts = Layout::default()
                 .direction(Direction::Vertical)
@@ -127,26 +145,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
                     .wrap(Wrap { trim: false }),
                 parts[0],
             );
-            let width = parts[1].width.saturating_sub(2) as usize;
-            let scroll = form.input.visual_scroll(width.max(1));
-            frame.render_widget(
-                Paragraph::new(form.input.value())
-                    .scroll((0, scroll.min(u16::MAX as usize) as u16))
-                    .block(panel(label).border_style(focused_border(&app.theme, focused))),
-                parts[1],
-            );
-            if focused && form.step != Step::Loading && width > 0 && parts[1].height >= 3 {
-                frame.set_cursor_position((
-                    parts[1].x
-                        + 1
-                        + form
-                            .input
-                            .visual_cursor()
-                            .saturating_sub(scroll)
-                            .min(width - 1) as u16,
-                    parts[1].y + 1,
-                ));
-            }
+            draw_input(frame, parts[1], &form.input, label, &app.theme, focused);
         }
     } else {
         frame.render_stateful_widget(
@@ -168,4 +167,28 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
         }),
         rows[3],
     );
+}
+
+fn draw_input(
+    frame: &mut Frame,
+    area: Rect,
+    input: &tui_input::Input,
+    label: &str,
+    theme: &crate::color::Theme,
+    focused: bool,
+) {
+    let width = area.width.saturating_sub(2) as usize;
+    let scroll = input.visual_scroll(width.max(1));
+    frame.render_widget(
+        Paragraph::new(input.value())
+            .scroll((0, scroll.min(u16::MAX as usize) as u16))
+            .block(panel(label).border_style(focused_border(theme, focused))),
+        area,
+    );
+    if focused && width > 0 && area.height >= 3 {
+        frame.set_cursor_position((
+            area.x + 1 + input.visual_cursor().saturating_sub(scroll).min(width - 1) as u16,
+            area.y + 1,
+        ));
+    }
 }

@@ -146,7 +146,7 @@ async fn real_backend_returns_only_own_balance_rank_and_fixed_comment_writes() {
             (
                 "strichliste_pay",
                 json!({"amount": 0.01}),
-                json!({"submitted": true, "value_cents": -1.0}),
+                json!({"submitted": true, "value_eur": -0.01}),
             ),
         ] {
             let response = client
@@ -164,5 +164,5 @@ async fn real_backend_returns_only_own_balance_rank_and_fixed_comment_writes() {
     let requests = http.join().unwrap();
     assert!(requests[3].starts_with("POST /strich-api/user/27/transaction "));
     let body: Value = serde_json::from_str(requests[3].split_once("\r\n\r\n").unwrap().1).unwrap();
-    assert_eq!(body, json!({"value": -1.0, "comment": "triggered by mcp"}));
+    assert_eq!(body, json!({"value": -0.01, "comment": "triggered by mcp"}));
 }

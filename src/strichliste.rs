@@ -1,4 +1,4 @@
-//! The deployed 0.11.0 API: balances are floating-point euros.
+//! The deployed 0.11.0 API: balances and transaction values are floating-point euros.
 //! Only selected account fields escape this module; transaction responses are ignored.
 
 pub mod cli;
@@ -57,15 +57,15 @@ pub enum Request {
 impl Request {
     pub fn value(&self) -> Result<Option<f64>> {
         match self {
-            Self::Pay(euros) => cents(*euros).map(|value| Some(-value)),
-            Self::Add(euros) => cents(*euros).map(Some),
+            Self::Pay(euros) => validate_amount(*euros).map(|value| Some(-value)),
+            Self::Add(euros) => validate_amount(*euros).map(Some),
             _ => Ok(None),
         }
     }
 
     pub fn preview(&self) -> Result<Value> {
         Ok(match self.value()? {
-            Some(value) => json!({"dry_run": true, "submitted": false, "value_cents": value}),
+            Some(value) => json!({"dry_run": true, "submitted": false, "value_eur": value}),
             None => json!({"dry_run": true}),
         })
     }
@@ -75,17 +75,16 @@ pub fn parse_amount(value: &str) -> std::result::Result<f64, String> {
     let amount = value
         .parse::<f64>()
         .map_err(|_| "expected euros as a number".to_string())?;
-    cents(amount).map_err(|error| error.to_string())?;
+    validate_amount(amount).map_err(|error| error.to_string())?;
     Ok(amount)
 }
 
-pub fn cents(euros: f64) -> Result<f64> {
-    let value = euros * 100.0;
+pub fn validate_amount(euros: f64) -> Result<f64> {
     ensure!(
-        euros.is_finite() && euros > 0.0 && value.is_finite(),
+        euros.is_finite() && euros > 0.0,
         "amount must be a positive finite number of euros"
     );
-    Ok(value)
+    Ok(euros)
 }
 
 #[derive(Clone, Debug)]
@@ -351,14 +350,15 @@ impl Client {
             })?;
         ensure!(
             response.status().is_success(),
-            "Strichliste transaction was not confirmed; check your balance before retrying"
+            "Strichliste POST /user/{user_id}/transaction returned HTTP {}; transaction was not confirmed; check your balance before retrying",
+            response.status()
         );
         // Never expose the raw response: it may include other users or transaction history.
-        Ok(json!({"submitted": true, "value_cents": body["value"]}))
+        Ok(json!({"submitted": true, "value_eur": body["value"]}))
     }
 
     pub async fn transfer(&self, recipient: &User, euros: f64, comment: &str) -> Result<Value> {
-        let value = -cents(euros)?;
+        let value = -validate_amount(euros)?;
         let sender = self.current_user().await?;
         ensure!(sender.id != recipient.id, "cannot send to yourself");
         self.post(
