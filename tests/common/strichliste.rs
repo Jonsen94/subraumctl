@@ -8,17 +8,17 @@ use std::{
 };
 
 pub fn user() -> Value {
-    json!({"id": 27, "name": "Me", "balance": 1234.5,
+    json!({"id": 27, "name": "Me", "balance": 12.345,
         "weightedCountOfPurchases": 10.5, "private": "DO NOT EXPOSE"})
 }
 
 pub fn users() -> Value {
-    json!([
+    json!({"overallCount": 4, "limit": null, "offset": null, "entries": [
         user(),
         {"id": 30, "name": "Other", "balance": -999, "weightedCountOfPurchases": 15},
         {"id": 31, "name": "Tie", "balance": 0, "weightedCountOfPurchases": 10.5},
         {"id": 32, "name": "Lower", "balance": 100000, "weightedCountOfPurchases": 1}
-    ])
+    ]})
 }
 
 pub fn server(responses: Vec<(u16, Value)>) -> (String, thread::JoinHandle<Vec<String>>) {

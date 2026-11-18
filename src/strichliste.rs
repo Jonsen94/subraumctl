@@ -1,4 +1,4 @@
-//! The deployed 0.11.0 API: values are cents, including fractional cents.
+//! The deployed 0.11.0 API: balances are floating-point euros.
 //! Only selected account fields escape this module; transaction responses are ignored.
 
 pub mod cli;
@@ -122,7 +122,7 @@ impl User {
         let balance = self
             .balance
             .ok_or_else(|| eyre!("Strichliste balance missing or invalid"))?;
-        Ok(json!({"balance_eur": balance / 100.0}))
+        Ok(json!({"balance_eur": balance}))
     }
 }
 
@@ -186,7 +186,11 @@ impl Client {
             .send()
             .await
             .map_err(|_| eyre!("Strichliste read failed"))?;
-        ensure!(response.status().is_success(), "Strichliste read rejected");
+        ensure!(
+            response.status().is_success(),
+            "Strichliste GET /{path} rejected: HTTP {}",
+            response.status()
+        );
         // Bound list responses as well as individual accounts.
         let mut response = response;
         let mut bytes = Vec::new();
@@ -205,17 +209,69 @@ impl Client {
     }
 
     pub async fn users(&self) -> Result<Vec<User>> {
-        let value = self.get("user").await?;
-        let users = value
-            .as_array()
-            .ok_or_else(|| eyre!("expected Strichliste user array"))?;
-        let users = users.iter().map(User::parse).collect::<Result<Vec<_>>>()?;
+        tokio::time::timeout(self.options.timeout, self.read_users())
+            .await
+            .map_err(|_| eyre!("Strichliste user list timed out"))?
+    }
+
+    async fn read_users(&self) -> Result<Vec<User>> {
+        let mut users = Vec::new();
         let mut ids = std::collections::HashSet::new();
-        ensure!(
-            users.iter().all(|user| ids.insert(user.id)),
-            "duplicate Strichliste user ids"
-        );
-        Ok(users)
+        let mut path = "user".to_owned();
+        let mut overall_count = None;
+        // Limit both total work and memory even if pagination metadata is inconsistent.
+        for page in 0..1000 {
+            let value = self.get(&path).await?;
+            let (entries, total, limit) = if let Some(entries) = value.as_array() {
+                ensure!(
+                    page == 0,
+                    "Strichliste pagination response lost its metadata"
+                );
+                (entries, entries.len(), None)
+            } else {
+                let entries = value["entries"]
+                    .as_array()
+                    .ok_or_else(|| eyre!("expected Strichliste user list with an entries array"))?;
+                let total = page_number(&value, "overallCount")?
+                    .ok_or_else(|| eyre!("Strichliste user list is missing overallCount"))?;
+                let offset = page_number(&value, "offset")?.unwrap_or(0);
+                let limit = page_number(&value, "limit")?;
+                ensure!(
+                    offset == users.len(),
+                    "Strichliste user page has an unexpected offset"
+                );
+                ensure!(
+                    limit.is_none_or(|limit| limit > 0 && entries.len() <= limit),
+                    "invalid Strichliste user page limit"
+                );
+                (entries, total, limit)
+            };
+            ensure!(total <= 100_000, "Strichliste user list too large");
+            ensure!(
+                overall_count.is_none_or(|count| count == total),
+                "Strichliste user count changed during pagination; refresh again"
+            );
+            overall_count = Some(total);
+            ensure!(
+                users.len() + entries.len() <= total,
+                "Strichliste entries exceed overallCount"
+            );
+            for value in entries {
+                let user = User::parse(value)?;
+                ensure!(ids.insert(user.id), "duplicate Strichliste user ids");
+                users.push(user);
+            }
+            if users.len() == total {
+                return Ok(users);
+            }
+            ensure!(
+                !entries.is_empty(),
+                "Strichliste user pagination made no progress"
+            );
+            let limit = limit.unwrap_or(entries.len()).min(1000);
+            path = format!("user?limit={limit}&offset={}", users.len());
+        }
+        Err(eyre!("Strichliste user pagination exceeded the page limit"))
     }
 
     fn select<'a>(&self, users: &'a [User]) -> Result<&'a User> {
@@ -310,6 +366,17 @@ impl Client {
             }),
         )
         .await
+    }
+}
+
+fn page_number(value: &Value, field: &str) -> Result<Option<usize>> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => value
+            .as_u64()
+            .and_then(|number| usize::try_from(number).ok())
+            .map(Some)
+            .ok_or_else(|| eyre!("invalid Strichliste pagination field: {field}")),
     }
 }
 

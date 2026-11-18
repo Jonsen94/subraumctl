@@ -133,13 +133,21 @@ returned, and HTTP errors omit response bodies and endpoint details.
 
 The implementation uses the legacy `/user` routes, not the newer PHP API:
 
-- `GET <base>/user`: an array of user objects with `id`, `name`, `balance` and
-  `weightedCountOfPurchases`.
-- `GET <base>/user/<id>`: one user object.
+- `GET <base>/user`: an object with `overallCount`, `limit`, `offset`, and an
+  `entries` array of user objects (`id`, `name`, `balance`,
+  `weightedCountOfPurchases`). `limit` and `offset` may be null for an unpaginated
+  response. Bare arrays from older variants are also accepted.
+- Paginated lists are fetched with `limit`/`offset` until `overallCount` entries
+  have been read. Inconsistent counts, offsets, duplicate ids, or stalled pages
+  fail instead of giving incomplete ranks or ambiguous account matches. The
+  configured HTTP timeout also bounds the complete list fetch.
+- `GET <base>/user/<id>`: one user object; `balance` is already in **euros** and
+  is preserved without conversion or rounding.
 - `POST <base>/user/<id>/transaction`: JSON with `value` in **cents** and `comment`.
   A successful 2xx response acknowledges the submission.
 
 Numeric balances and scores may also be returned as numeric strings.
+Rejected reads report the relative route and HTTP status without response bodies.
 Based on the provided deployed-server example, `pay 0.01` posts `value: -1`.
 A one-cent transfer from user 27 to user 30 uses:
 
@@ -156,6 +164,5 @@ Comments use the account names returned by the API. There is no client-side
 two-transaction transfer fallback. Automatic retries and redirects are disabled.
 On an unconfirmed submission, check the account before retrying.
 
-Tests use local HTTP fixtures and the supplied transfer contract. The private
-deployment has not been contacted; its read-response shapes still need to be
-confirmed against these documented assumptions.
+Tests use local HTTP fixtures, the supplied user-list wrapper and balance sample,
+and the earlier transfer contract. The private deployment has not been contacted.

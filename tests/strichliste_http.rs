@@ -96,6 +96,118 @@ async fn balance_name_resolution_rank_ties_and_mcp_projection() {
 }
 
 #[tokio::test]
+async fn deployed_balance_is_euros_and_legacy_bare_arrays_still_work() {
+    let mut user = fixture::user();
+    user["balance"] = json!(-2.4181945088546075);
+    let (url, server) = fixture::server(vec![
+        (200, user),
+        (200, fixture::users()["entries"].clone()),
+    ]);
+    let client = Client::new(options(url)).unwrap();
+    assert_eq!(
+        client.execute(&Request::Balance, "").await.unwrap(),
+        json!({"balance_eur": -2.4181945088546075})
+    );
+    assert_eq!(client.users().await.unwrap().len(), 4);
+    server.join().unwrap();
+}
+
+#[tokio::test]
+async fn rank_and_name_lookup_include_later_user_pages() {
+    let entries = fixture::users()["entries"].clone();
+    let pages = vec![
+        (
+            200,
+            json!({"overallCount": 4, "offset": 0, "limit": 2, "entries": [entries[1], entries[3]]}),
+        ),
+        (
+            200,
+            json!({"overallCount": 4, "offset": 2, "limit": 2, "entries": [entries[0], entries[2]]}),
+        ),
+    ];
+    for request in [Request::Balance, Request::Rank] {
+        let (url, server) = fixture::server(pages.clone());
+        let mut opts = options(url);
+        opts.user_id = None;
+        opts.user = Some("Me".into());
+        let result = Client::new(opts)
+            .unwrap()
+            .execute(&request, "")
+            .await
+            .unwrap();
+        match request {
+            Request::Balance => assert_eq!(result, json!({"balance_eur": 12.345})),
+            _ => assert_eq!(
+                result,
+                json!({"rank": 2, "weighted_count_of_purchases": 10.5})
+            ),
+        }
+        let requests = server.join().unwrap();
+        assert!(requests[0].starts_with("GET /strich-api/user "));
+        assert!(requests[1].starts_with("GET /strich-api/user?limit=2&offset=2 "));
+    }
+}
+
+#[tokio::test]
+async fn inconsistent_pages_fail_instead_of_returning_partial_rank_or_accounts() {
+    let entries = fixture::users()["entries"].clone();
+    let first =
+        json!({"overallCount": 4, "offset": 0, "limit": 2, "entries": [entries[0], entries[1]]});
+    for second in [
+        json!({"overallCount": 4, "offset": 2, "limit": 2, "entries": []}),
+        json!({"overallCount": 4, "offset": 2, "limit": 2, "entries": [entries[0], entries[2]]}),
+        json!({"overallCount": 5, "offset": 2, "limit": 2, "entries": [entries[2], entries[3]]}),
+        json!({"overallCount": 4, "offset": 0, "limit": 2, "entries": [entries[2], entries[3]]}),
+        json!([entries[2], entries[3]]),
+    ] {
+        let (url, server) = fixture::server(vec![(200, first.clone()), (200, second)]);
+        assert!(
+            Client::new(options(url))
+                .unwrap()
+                .execute(&Request::Rank, "")
+                .await
+                .is_err()
+        );
+        assert_eq!(server.join().unwrap().len(), 2);
+    }
+    for invalid in [
+        json!({"entries": []}),
+        json!({"overallCount": -1, "entries": []}),
+        json!({"overallCount": 100001, "entries": []}),
+        json!({"overallCount": 0, "entries": [entries[0]]}),
+        json!({"overallCount": 4, "limit": 0, "entries": []}),
+        json!({"overallCount": 4, "offset": "PRIVATE", "entries": []}),
+    ] {
+        let (url, server) = fixture::server(vec![(200, invalid)]);
+        let error = Client::new(options(url))
+            .unwrap()
+            .users()
+            .await
+            .unwrap_err();
+        assert!(!error.to_string().contains("PRIVATE"));
+        server.join().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn read_rejections_report_route_and_status_without_response_bodies() {
+    for status in [302, 401, 404, 500] {
+        let (url, server) = fixture::server(vec![(status, json!({"error": "PRIVATE"}))]);
+        let error = Client::new(options(url))
+            .unwrap()
+            .execute(&Request::Balance, "")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("GET /user/27"));
+        assert!(error.contains(&format!("HTTP {status}")));
+        assert!(!error.contains("PRIVATE"));
+        assert!(!error.contains("127.0.0.1"));
+        server.join().unwrap();
+    }
+}
+
+#[tokio::test]
 async fn mcp_writes_force_the_audit_comment_and_hide_transaction_response() {
     for request in [Request::Pay(1.0), Request::Add(1.0)] {
         let (url, server) = fixture::server(vec![(200, fixture::user()), (201, fixture::users())]);
@@ -113,12 +225,12 @@ async fn mcp_writes_force_the_audit_comment_and_hide_transaction_response() {
 #[tokio::test]
 async fn missing_scores_ambiguous_names_and_mismatched_ids_fail_closed() {
     let mut missing_score = fixture::users();
-    missing_score[1]
+    missing_score["entries"][1]
         .as_object_mut()
         .unwrap()
         .remove("weightedCountOfPurchases");
     let mut ambiguous = fixture::users();
-    ambiguous[1]["name"] = json!("me");
+    ambiguous["entries"][1]["name"] = json!("me");
     for (users, name) in [(missing_score, None), (ambiguous, Some("Me"))] {
         let (url, server) = fixture::server(vec![(200, users)]);
         let mut opts = options(url);
