@@ -10,7 +10,6 @@ use subraumctl::strichliste::{Client, Options, Request, execute_mcp};
 fn options(url: String) -> Options {
     Options {
         url: Some(url),
-        user: None,
         user_id: Some(27),
         timeout: Duration::from_secs(2),
     }
@@ -22,15 +21,16 @@ fn body(request: &str) -> Value {
 
 #[tokio::test]
 async fn account_history_is_own_recent_transactions_in_euros_newest_first() {
-    let mut user = fixture::user();
-    user["transactions"].as_array_mut().unwrap().reverse();
-    let (url, server) = fixture::server(vec![(200, fixture::users()), (200, user)]);
-    let mut opts = options(url);
-    opts.user_id = None;
-    opts.user = Some("Me".into());
-    let account = Client::new(opts).unwrap().account_snapshot().await.unwrap();
+    let mut history = fixture::transactions();
+    history["entries"].as_array_mut().unwrap().reverse();
+    let (url, server) = fixture::server(vec![(200, fixture::user()), (200, history)]);
+    let account = Client::new(options(url))
+        .unwrap()
+        .account_snapshot()
+        .await
+        .unwrap();
     assert_eq!(account.balance.unwrap(), 12.345);
-    let transactions = account.transactions.unwrap();
+    let transactions = account.transactions.unwrap().entries;
     assert_eq!(
         transactions.iter().map(|item| item.id).collect::<Vec<_>>(),
         [104, 103, 102, 101]
@@ -47,7 +47,8 @@ async fn account_history_is_own_recent_transactions_in_euros_newest_first() {
     assert!(transactions[3].comment.is_none());
     let requests = server.join().unwrap();
     assert_eq!(requests.len(), 2);
-    assert!(requests[1].starts_with("GET /strich-api/user/27 "));
+    assert!(requests[0].starts_with("GET /strich-api/user/27 "));
+    assert!(requests[1].starts_with("GET /strich-api/user/27/transaction?limit=50&offset=0 "));
 }
 
 #[tokio::test]
@@ -59,9 +60,9 @@ async fn bad_history_does_not_hide_balance_or_leak_other_accounts() {
         ("comment", json!({"private": "PRIVATE"})),
         ("id", json!(103)),
     ] {
-        let mut user = fixture::user();
-        user["transactions"][0][field] = invalid;
-        let (url, server) = fixture::server(vec![(200, user)]);
+        let mut history = fixture::transactions();
+        history["entries"][0][field] = invalid;
+        let (url, server) = fixture::server(vec![(200, fixture::user()), (200, history)]);
         let account = Client::new(options(url))
             .unwrap()
             .account_snapshot()
@@ -70,12 +71,10 @@ async fn bad_history_does_not_hide_balance_or_leak_other_accounts() {
         assert_eq!(account.balance.unwrap(), 12.345);
         let error = account.transactions.unwrap_err().to_string();
         assert!(!error.contains("PRIVATE"));
-        assert_eq!(server.join().unwrap().len(), 1);
+        assert_eq!(server.join().unwrap().len(), 2);
     }
     for (history, valid) in [(json!([]), true), (Value::Null, false)] {
-        let mut user = fixture::user();
-        user["transactions"] = history;
-        let (url, server) = fixture::server(vec![(200, user)]);
+        let (url, server) = fixture::server(vec![(200, fixture::user()), (200, history)]);
         let account = Client::new(options(url))
             .unwrap()
             .account_snapshot()
@@ -98,9 +97,50 @@ async fn bad_history_does_not_hide_balance_or_leak_other_accounts() {
 }
 
 #[test]
+fn config_defaults_to_deployment_url_and_uses_only_numeric_identity() {
+    let help = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+        .env_remove("SUBRAUMCTL_STRICHLISTE_URL")
+        .args(["--help"])
+        .output()
+        .unwrap();
+    assert!(help.status.success());
+    let help = String::from_utf8(help.stdout).unwrap();
+    assert!(help.contains("https://mate.wahrhe.it/strich-api"));
+    assert!(!help.contains("SUBRAUMCTL_STRICHLISTE_USER="));
+    let missing_id = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+        .env_remove("SUBRAUMCTL_STRICHLISTE_USER_ID")
+        .env("SUBRAUMCTL_STRICHLISTE_USER", "Me")
+        .args(["strichliste", "balance"])
+        .output()
+        .unwrap();
+    assert!(!missing_id.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing_id.stderr).contains("configure --strichliste-user-id")
+    );
+    let (url, server) = fixture::server(vec![(200, fixture::user())]);
+    let output = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+        .env("SUBRAUMCTL_STRICHLISTE_URL", url)
+        .env("SUBRAUMCTL_STRICHLISTE_USER_ID", "27")
+        .env("SUBRAUMCTL_STRICHLISTE_USER", "ignored old setting")
+        .args(["--json", "strichliste", "balance"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+        json!({"balance_eur": 12.345})
+    );
+    assert!(server.join().unwrap()[0].starts_with("GET /strich-api/user/27 "));
+}
+
+#[test]
 fn cli_transactions_projects_history_and_supports_offline_preview() {
     for json_output in [true, false] {
-        let (url, server) = fixture::server(vec![(200, fixture::user())]);
+        let (url, server) = fixture::server(vec![(200, fixture::transactions())]);
         let mut command = Command::new(env!("CARGO_BIN_EXE_subraumctl"));
         command.args(["--strichliste-url", &url, "--strichliste-user-id", "27"]);
         if json_output {
@@ -146,6 +186,101 @@ fn cli_transactions_projects_history_and_supports_offline_preview() {
         serde_json::from_slice::<Value>(&output.stdout).unwrap(),
         json!({"dry_run": true})
     );
+}
+
+#[tokio::test]
+async fn transaction_pages_follow_explicit_offsets_and_validate_metadata() {
+    let (url, server) = fixture::server(vec![
+        (200, fixture::transaction_page(0, 50, 112)),
+        (200, fixture::transaction_page(50, 50, 112)),
+        (200, fixture::transaction_page(100, 50, 112)),
+    ]);
+    let client = Client::new(options(url)).unwrap();
+    let mut ids = Vec::new();
+    let mut offset = 0;
+    loop {
+        let page = client.transactions(50, offset).await.unwrap();
+        assert_eq!(page.total, Some(112));
+        ids.extend(page.entries.iter().map(|entry| entry.id));
+        match page.next_offset {
+            Some(next) => offset = next,
+            None => break,
+        }
+    }
+    assert_eq!(ids, (1..=112).rev().collect::<Vec<_>>());
+    let requests = server.join().unwrap();
+    for (request, offset) in requests.iter().zip([0, 50, 100]) {
+        assert!(request.starts_with(&format!(
+            "GET /strich-api/user/27/transaction?limit=50&offset={offset} "
+        )));
+    }
+    for (field, invalid) in [
+        ("offset", json!(1)),
+        ("limit", json!(0)),
+        ("overallCount", json!(2)),
+        ("entries", json!([])),
+    ] {
+        let mut page = fixture::transactions();
+        page[field] = invalid;
+        let (url, server) = fixture::server(vec![(200, page)]);
+        assert!(
+            Client::new(options(url))
+                .unwrap()
+                .transactions(50, 0)
+                .await
+                .is_err()
+        );
+        server.join().unwrap();
+    }
+    // Servers may cap page size; advance by the count actually returned.
+    let (url, server) = fixture::server(vec![(200, fixture::transaction_page(0, 10, 112))]);
+    let page = Client::new(options(url))
+        .unwrap()
+        .transactions(50, 0)
+        .await
+        .unwrap();
+    assert_eq!(page.next_offset, Some(10));
+    server.join().unwrap();
+}
+
+#[test]
+fn cli_transaction_limit_and_offset_are_used_and_invalid_limits_rejected() {
+    let (url, server) = fixture::server(vec![(200, fixture::transaction_page(10, 10, 112))]);
+    let output = Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+        .args([
+            "--strichliste-url",
+            &url,
+            "--strichliste-user-id",
+            "27",
+            "--json",
+            "strichliste",
+            "transactions",
+            "--limit",
+            "10",
+            "--offset",
+            "10",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["transactions"].as_array().unwrap().len(), 10);
+    assert_eq!(value["next_offset"], 20);
+    assert_eq!(value["overall_count"], 112);
+    assert!(
+        server.join().unwrap()[0]
+            .starts_with("GET /strich-api/user/27/transaction?limit=10&offset=10 ")
+    );
+    for limit in ["0", "1001", "-1"] {
+        assert!(
+            !Command::new(env!("CARGO_BIN_EXE_subraumctl"))
+                .args(["--dry-run", "strichliste", "transactions", "--limit", limit])
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+    }
 }
 
 #[tokio::test]
@@ -197,7 +332,7 @@ async fn transfer_matches_the_supplied_contract() {
 }
 
 #[tokio::test]
-async fn balance_name_resolution_rank_ties_and_mcp_projection() {
+async fn balance_rank_ties_and_mcp_projection() {
     let (url, server) = fixture::server(vec![(200, fixture::user())]);
     let result = execute_mcp(options(url), &Request::Balance, false)
         .await
@@ -205,11 +340,8 @@ async fn balance_name_resolution_rank_ties_and_mcp_projection() {
     assert_eq!(result, json!({"balance_eur": 12.345}));
     server.join().unwrap();
 
-    let (url, server) = fixture::server(vec![(200, fixture::users()), (200, fixture::users())]);
-    let mut opts = options(url);
-    opts.user_id = None;
-    opts.user = Some("mE".into());
-    let client = Client::new(opts).unwrap();
+    let (url, server) = fixture::server(vec![(200, fixture::user()), (200, fixture::users())]);
+    let client = Client::new(options(url)).unwrap();
     assert_eq!(
         client.execute(&Request::Balance, "").await.unwrap(),
         json!({"balance_eur": 12.345})
@@ -218,9 +350,9 @@ async fn balance_name_resolution_rank_ties_and_mcp_projection() {
         client.execute(&Request::Rank, "").await.unwrap(),
         json!({"rank": 2, "weighted_count_of_purchases": 10.5})
     );
-    for request in server.join().unwrap() {
-        assert!(request.starts_with("GET /strich-api/user "));
-    }
+    let requests = server.join().unwrap();
+    assert!(requests[0].starts_with("GET /strich-api/user/27 "));
+    assert!(requests[1].starts_with("GET /strich-api/user "));
 }
 
 #[tokio::test]
@@ -241,7 +373,7 @@ async fn deployed_balance_is_euros_and_legacy_bare_arrays_still_work() {
 }
 
 #[tokio::test]
-async fn rank_and_name_lookup_include_later_user_pages() {
+async fn rank_includes_configured_id_on_later_user_pages() {
     let entries = fixture::users()["entries"].clone();
     let pages = vec![
         (
@@ -253,27 +385,19 @@ async fn rank_and_name_lookup_include_later_user_pages() {
             json!({"overallCount": 4, "offset": 2, "limit": 2, "entries": [entries[0], entries[2]]}),
         ),
     ];
-    for request in [Request::Balance, Request::Rank] {
-        let (url, server) = fixture::server(pages.clone());
-        let mut opts = options(url);
-        opts.user_id = None;
-        opts.user = Some("Me".into());
-        let result = Client::new(opts)
-            .unwrap()
-            .execute(&request, "")
-            .await
-            .unwrap();
-        match request {
-            Request::Balance => assert_eq!(result, json!({"balance_eur": 12.345})),
-            _ => assert_eq!(
-                result,
-                json!({"rank": 2, "weighted_count_of_purchases": 10.5})
-            ),
-        }
-        let requests = server.join().unwrap();
-        assert!(requests[0].starts_with("GET /strich-api/user "));
-        assert!(requests[1].starts_with("GET /strich-api/user?limit=2&offset=2 "));
-    }
+    let (url, server) = fixture::server(pages);
+    let result = Client::new(options(url))
+        .unwrap()
+        .execute(&Request::Rank, "")
+        .await
+        .unwrap();
+    assert_eq!(
+        result,
+        json!({"rank": 2, "weighted_count_of_purchases": 10.5})
+    );
+    let requests = server.join().unwrap();
+    assert!(requests[0].starts_with("GET /strich-api/user "));
+    assert!(requests[1].starts_with("GET /strich-api/user?limit=2&offset=2 "));
 }
 
 #[tokio::test]
@@ -351,7 +475,7 @@ async fn mcp_writes_force_the_audit_comment_and_hide_transaction_response() {
 }
 
 #[tokio::test]
-async fn missing_scores_ambiguous_names_and_mismatched_ids_fail_closed() {
+async fn missing_scores_and_mismatched_ids_fail_closed_but_duplicate_names_are_allowed() {
     let mut missing_score = fixture::users();
     missing_score["entries"][1]
         .as_object_mut()
@@ -359,20 +483,10 @@ async fn missing_scores_ambiguous_names_and_mismatched_ids_fail_closed() {
         .remove("weightedCountOfPurchases");
     let mut ambiguous = fixture::users();
     ambiguous["entries"][1]["name"] = json!("me");
-    for (users, name) in [(missing_score, None), (ambiguous, Some("Me"))] {
+    for (users, valid) in [(missing_score, false), (ambiguous, true)] {
         let (url, server) = fixture::server(vec![(200, users)]);
-        let mut opts = options(url);
-        if let Some(name) = name {
-            opts.user_id = None;
-            opts.user = Some(name.into());
-        }
-        let client = Client::new(opts).unwrap();
-        let request = if name.is_some() {
-            Request::Pay(1.0)
-        } else {
-            Request::Rank
-        };
-        assert!(client.execute(&request, "").await.is_err());
+        let client = Client::new(options(url)).unwrap();
+        assert_eq!(client.execute(&Request::Rank, "").await.is_ok(), valid);
         assert_eq!(server.join().unwrap().len(), 1);
     }
     let mut wrong = fixture::user();

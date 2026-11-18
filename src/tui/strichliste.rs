@@ -12,7 +12,8 @@ use super::app::{App, Popup, Section, StatusKind};
 use super::safe_mode::{ConfirmChoice, PendingCommand};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
 use crate::strichliste::{
-    Client, Options, Request, Transaction, User, parse_amount, validate_amount,
+    Client, Options, Request, TRANSACTION_PAGE_SIZE, Transaction, TransactionPage, User,
+    parse_amount, validate_amount,
 };
 
 pub const ACTIONS: [&str; 4] = ["Pay", "Add credit", "Send to another user", "Transactions"];
@@ -21,6 +22,8 @@ pub const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 #[derive(Clone, Debug)]
 pub enum Command {
     Refresh,
+    RefreshAt(usize),
+    Transactions(usize),
     LoadRecipients,
     Book {
         request: Request,
@@ -42,16 +45,19 @@ impl Command {
             Self::Send { amount, .. } => {
                 validate_amount(*amount)?;
             }
-            Self::LoadRecipients | Self::Refresh => {}
+            Self::LoadRecipients | Self::Refresh | Self::RefreshAt(_) | Self::Transactions(_) => {}
         }
         Ok(())
     }
 
     pub fn preview_lines(&self) -> Vec<String> {
         match self {
-            Self::Refresh => {
+            Self::Refresh | Self::RefreshAt(_) => {
                 vec!["Read your balance, purchase rank and recent transactions".into()]
             }
+            Self::Transactions(offset) => vec![format!(
+                "Read {TRANSACTION_PAGE_SIZE} transactions at offset {offset}"
+            )],
             Self::LoadRecipients => vec!["Load recipients for live search".into()],
             Self::Book { request, comment } => vec![
                 match request {
@@ -75,14 +81,18 @@ impl Command {
             ],
         }
     }
+    fn is_refresh(&self) -> bool {
+        matches!(self, Self::Refresh | Self::RefreshAt(_))
+    }
 }
 
 pub enum Response {
     Account {
         balance: Result<f64, String>,
         rank: Result<(u64, f64), String>,
-        transactions: Result<Vec<Transaction>, String>,
+        transactions: Result<TransactionPage, String>,
     },
+    Transactions(TransactionPage),
     Recipients(Vec<User>),
     Submitted,
     DryRun,
@@ -172,6 +182,10 @@ pub struct State {
     pub transactions_stale: bool,
     pub show_transactions: bool,
     pub transaction_selection: ListState,
+    pub transaction_offset: usize,
+    pub transaction_total: Option<usize>,
+    pub transaction_next: Option<usize>,
+    pub transaction_previous: Vec<usize>,
     pub busy: bool,
     pub last_refresh: Option<Instant>,
     pub full_precision: bool,
@@ -187,8 +201,12 @@ async fn execute(options: Options, command: &Command, dry_run: bool) -> Result<R
     }
     let client = Client::new(options)?;
     match command {
-        Command::Refresh => {
-            let (balance, transactions) = match client.account_snapshot().await {
+        Command::Refresh | Command::RefreshAt(_) => {
+            let offset = match command {
+                Command::RefreshAt(offset) => *offset,
+                _ => 0,
+            };
+            let (balance, transactions) = match client.account_snapshot_at(offset).await {
                 Ok(account) => (
                     account.balance.map_err(|error| error.to_string()),
                     account.transactions.map_err(|error| error.to_string()),
@@ -215,6 +233,9 @@ async fn execute(options: Options, command: &Command, dry_run: bool) -> Result<R
                 transactions,
             })
         }
+        Command::Transactions(offset) => Ok(Response::Transactions(
+            client.transactions(TRANSACTION_PAGE_SIZE, *offset).await?,
+        )),
         Command::LoadRecipients => {
             let current = client.current_user().await?;
             let mut users: Vec<_> = client
@@ -286,7 +307,10 @@ impl App {
             return;
         }
         if self.strichliste.show_transactions {
-            let count = self.strichliste.transactions.as_ref().map_or(0, Vec::len);
+            let entries = self.strichliste.transactions.as_ref().map_or(0, Vec::len);
+            let count = entries
+                + usize::from(self.strichliste.transaction_next.is_some())
+                + usize::from(!self.strichliste.transaction_previous.is_empty());
             let selected = self
                 .strichliste
                 .transaction_selection
@@ -307,10 +331,32 @@ impl App {
             match key.code {
                 KeyCode::Esc | KeyCode::Char('q') => self.strichliste.show_transactions = false,
                 KeyCode::Char('r') => self.send_strichliste(Command::Refresh),
+                KeyCode::Char('n') => {
+                    if let Some(offset) = self.strichliste.transaction_next {
+                        self.send_strichliste(Command::Transactions(offset));
+                    }
+                }
+                KeyCode::Char('b') => {
+                    if let Some(offset) = self.strichliste.transaction_previous.last().copied() {
+                        self.send_strichliste(Command::Transactions(offset));
+                    }
+                }
                 KeyCode::Char('p') => {
                     self.strichliste.full_precision = !self.strichliste.full_precision
                 }
                 KeyCode::Enter => {
+                    if index >= entries {
+                        let offset =
+                            if index == entries && self.strichliste.transaction_next.is_some() {
+                                self.strichliste.transaction_next
+                            } else {
+                                self.strichliste.transaction_previous.last().copied()
+                            };
+                        if let Some(offset) = offset {
+                            self.send_strichliste(Command::Transactions(offset));
+                        }
+                        return;
+                    }
                     if let Some(transaction) = self
                         .strichliste
                         .transactions
@@ -466,7 +512,13 @@ impl App {
             self.set_status("Strichliste is busy", StatusKind::Info);
             return;
         }
-        if matches!(command, Command::Refresh) {
+        let command =
+            if matches!(command, Command::Refresh) && self.strichliste.transaction_offset > 0 {
+                Command::RefreshAt(self.strichliste.transaction_offset)
+            } else {
+                command
+            };
+        if command.is_refresh() {
             self.strichliste.last_refresh = Some(Instant::now());
         }
         let error = command.validate().err().map(|error| error.to_string());
@@ -509,7 +561,7 @@ impl App {
 
     pub(super) fn handle_strichliste_event(&mut self, event: Event) {
         self.strichliste.busy = false;
-        if matches!(event.command, Command::Refresh) {
+        if event.command.is_refresh() {
             self.strichliste.last_refresh = Some(Instant::now());
         }
         self.strichliste.error = None;
@@ -525,23 +577,7 @@ impl App {
                 self.strichliste.rank_stale = rank.is_err();
                 self.strichliste.transactions_stale = transactions.is_err();
                 match transactions {
-                    Ok(transactions) => {
-                        let previous_id = self
-                            .strichliste
-                            .transaction_selection
-                            .selected()
-                            .and_then(|index| self.strichliste.transactions.as_ref()?.get(index))
-                            .map(|transaction| transaction.id);
-                        let selected = previous_id
-                            .and_then(|id| {
-                                transactions
-                                    .iter()
-                                    .position(|transaction| transaction.id == id)
-                            })
-                            .or_else(|| (!transactions.is_empty()).then_some(0));
-                        self.strichliste.transaction_selection.select(selected);
-                        self.strichliste.transactions = Some(transactions);
-                    }
+                    Ok(page) => self.set_transaction_page(page),
                     Err(error) => errors.push(error),
                 }
                 match balance {
@@ -558,6 +594,10 @@ impl App {
                     self.strichliste.error = Some(errors.join("; "));
                     "Refresh incomplete; previous values retained".into()
                 }
+            }
+            Ok(Response::Transactions(page)) => {
+                self.set_transaction_page(page);
+                "Transactions loaded".into()
             }
             Ok(Response::Recipients(users)) => {
                 if let Some(form) = &mut self.strichliste.form {
@@ -589,9 +629,12 @@ impl App {
                         message: error.clone(),
                     });
                 }
-                if matches!(event.command, Command::Refresh) {
+                if event.command.is_refresh() {
                     self.strichliste.balance_stale = true;
                     self.strichliste.rank_stale = true;
+                    self.strichliste.transactions_stale = true;
+                }
+                if matches!(event.command, Command::Transactions(_)) {
                     self.strichliste.transactions_stale = true;
                 }
                 if let Some(form) = &mut self.strichliste.form {
@@ -621,8 +664,51 @@ impl App {
             },
         );
         if refresh {
+            self.strichliste.transaction_offset = 0;
+            self.strichliste.transaction_previous.clear();
             self.send_strichliste(Command::Refresh);
         }
+    }
+
+    fn set_transaction_page(&mut self, page: TransactionPage) {
+        let state = &mut self.strichliste;
+        let previous_id = (page.offset == state.transaction_offset)
+            .then(|| {
+                state
+                    .transaction_selection
+                    .selected()
+                    .and_then(|index| state.transactions.as_ref()?.get(index))
+                    .map(|transaction| transaction.id)
+            })
+            .flatten();
+        if page.offset > state.transaction_offset {
+            state.transaction_previous.push(state.transaction_offset);
+        } else if page.offset < state.transaction_offset {
+            state
+                .transaction_previous
+                .retain(|offset| *offset < page.offset);
+        }
+        let selected = previous_id
+            .and_then(|id| {
+                page.entries
+                    .iter()
+                    .position(|transaction| transaction.id == id)
+            })
+            .or_else(|| {
+                (!page.entries.is_empty()
+                    || page.next_offset.is_some()
+                    || !state.transaction_previous.is_empty())
+                .then_some(0)
+            });
+        if page.offset != state.transaction_offset {
+            state.transaction_selection = ListState::default();
+        }
+        state.transaction_selection.select(selected);
+        state.transaction_offset = page.offset;
+        state.transaction_total = page.total;
+        state.transaction_next = page.next_offset;
+        state.transactions_stale = false;
+        state.transactions = Some(page.entries);
     }
 
     #[cfg(feature = "tui-mouse")]
@@ -644,7 +730,10 @@ impl App {
         let row = mouse.row.saturating_sub(list.y + 1) as usize;
         if self.strichliste.show_transactions {
             let index = self.strichliste.transaction_selection.offset() + row;
-            if index < self.strichliste.transactions.as_ref().map_or(0, Vec::len) {
+            let count = self.strichliste.transactions.as_ref().map_or(0, Vec::len)
+                + usize::from(self.strichliste.transaction_next.is_some())
+                + usize::from(!self.strichliste.transaction_previous.is_empty());
+            if index < count {
                 self.strichliste.transaction_selection.select(Some(index));
                 if double_click {
                     self.handle_strichliste_key(KeyEvent::from(KeyCode::Enter));

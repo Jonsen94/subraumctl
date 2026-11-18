@@ -15,19 +15,18 @@ Nix packages: `.#subraumctl-strichliste` and `.#subraumctl-mcp-strichliste`.
 The same `strichliste` feature enables both CLI commands and the TUI tab.
 Default builds do not include Strichliste commands, the tab, or connection options.
 
-Supply the API base URL and **one** account selector:
+Set your numeric account id. The API URL defaults to
+`https://mate.wahrhe.it/strich-api`:
 
 ```sh
-export SUBRAUMCTL_STRICHLISTE_URL='https://your-server/strich-api'
 export SUBRAUMCTL_STRICHLISTE_USER_ID=27
-# Alternatively, instead of USER_ID:
-# export SUBRAUMCTL_STRICHLISTE_USER='your username'
+# Optional URL override:
+# export SUBRAUMCTL_STRICHLISTE_URL='https://your-server/strich-api'
 ```
 
-Equivalent global flags are `--strichliste-url`, `--strichliste-user-id` and
-`--strichliste-user`. Names are matched exactly, case-insensitively; ambiguous
-names fail and require a numeric id. Numeric names work with `--strichliste-user`.
-The endpoint has no built-in default and is used only on a Strichliste operation.
+Equivalent global flags are `--strichliste-url` and `--strichliste-user-id`.
+Account selection is by numeric id only. The former username flag and
+`SUBRAUMCTL_STRICHLISTE_USER` environment variable are no longer supported.
 HTTP requests time out after five seconds; override with `--strichliste-timeout`
 or `SUBRAUMCTL_STRICHLISTE_TIMEOUT` (1–120 seconds).
 
@@ -65,12 +64,14 @@ operation instead of producing an incomplete rank.
 prompts go to stderr. `--dry-run` performs no HTTP requests, including no user
 lookup: it previews values/comments, with recipient selection left unresolved.
 
-`transactions` shows the recent entries returned by your account's detail
-endpoint, newest transaction id first. It includes date, signed euro amount,
+`transactions` loads **50 entries by default** from
+`/user/<id>/transaction?limit=50&offset=0`, newest transaction id first.
+It includes date, signed euro amount,
 pay/add or transfer label, and comment. Human output rounds amounts to cents;
 `--json strichliste transactions` preserves the full `value_eur` precision.
-The server controls how many recent entries it returns; this is not a full
-paginated history.
+Use `transactions --limit 100 --offset 100` for another page. Limits range from
+1 to 1000. JSON also includes `offset`, `overall_count` (when supplied by the
+server), and `next_offset` (null at the end).
 
 Legacy transfer labels are inferred from the `to <name>: …` / `from <name>: …`
 comment convention and the amount's sign. The original comment is shown so that
@@ -98,12 +99,18 @@ balance or any transaction amounts. JSON/MCP results retain full precision.
 
 - Use **Up/Down**, then **Enter** to choose **Pay**, **Add credit**, or **Send**.
 - Choose **Transactions**, or press **t**, to view recent account transactions.
+  The first page requests **50 transactions**. **n** (or the **Load older
+  transactions** row) opens the next page; **b** returns to the previous page.
+  The title shows the displayed range and total. Comments are visible in each
+  row and shortened with `...` to fit; narrow terminals show compact dates and
+  transaction labels.
   Use **Up/Down**, **PageUp/PageDown**, or **Home/End** to browse; **Enter** opens
   the date, full-precision amount and complete comment (scroll with **Up/Down**).
   **Enter/Esc** closes the detail dialog; **t/Esc/q** returns from history to
   actions. **p** also toggles the history list's amount precision.
-  History shares the 10-second account refresh, **r** refresh, and post-write
-  refresh. Failed reads retain the last history labelled `(previous)`.
+  History shares the 10-second account refresh and **r** refresh, keeping the
+  current page. A successful write returns history to the newest page.
+  Failed reads retain the last history labelled `(previous)`.
 - Pay/add prompt for a positive euro amount and an optional comment.
 - Send loads recipients once when opened, then filters names live as you type
   (case-insensitive). You can type while the list loads. Select a match with
@@ -171,10 +178,14 @@ The implementation uses the legacy `/user` routes, not the newer PHP API:
   response. Bare arrays from older variants are also accepted.
 - Paginated lists are fetched with `limit`/`offset` until `overallCount` entries
   have been read. Inconsistent counts, offsets, duplicate ids, or stalled pages
-  fail instead of giving incomplete ranks or ambiguous account matches. The
+  fail instead of giving incomplete ranks or recipient lists. The
   configured HTTP timeout also bounds the complete list fetch.
 - `GET <base>/user/<id>`: one user object; `balance` is already in **euros** and
   is preserved without conversion or rounding.
+- `GET <base>/user/<id>/transaction?limit=50&offset=0`: an `entries` array with
+  `overallCount`, `limit`, and `offset` metadata (bare arrays are also accepted).
+  Each entry has `id`, `userId`, `createDate`, `value`, and optional `comment`.
+  Returned user ids and pagination metadata are validated before showing history.
 - `POST <base>/user/<id>/transaction`: JSON with `value` in **euros** and `comment`.
   A successful 2xx response acknowledges the submission.
 

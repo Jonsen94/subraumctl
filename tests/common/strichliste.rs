@@ -27,6 +27,20 @@ pub fn users() -> Value {
     ]})
 }
 
+pub fn transactions() -> Value {
+    json!({"overallCount": 4, "limit": 50, "offset": 0, "entries": user()["transactions"]})
+}
+
+pub fn transaction_page(offset: usize, limit: usize, total: usize) -> Value {
+    let entries: Vec<_> = (offset..offset.saturating_add(limit).min(total))
+        .map(|index| {
+            json!({"id": total - index, "userId": 27, "createDate": "2026-11-18 18:45:22",
+            "value": -0.01, "comment": format!("transaction {}", total - index)})
+        })
+        .collect();
+    json!({"overallCount": total, "limit": limit, "offset": offset, "entries": entries})
+}
+
 pub fn server(responses: Vec<(u16, Value)>) -> (String, thread::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/strich-api", listener.local_addr().unwrap());

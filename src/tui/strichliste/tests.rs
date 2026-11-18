@@ -90,8 +90,16 @@ fn options(url: String) -> Options {
     Options {
         url: Some(url),
         user_id: Some(27),
-        user: None,
         timeout: Duration::from_secs(2),
+    }
+}
+
+fn page(entries: Vec<Transaction>) -> TransactionPage {
+    TransactionPage {
+        total: Some(entries.len()),
+        entries,
+        offset: 0,
+        next_offset: None,
     }
 }
 
@@ -111,7 +119,7 @@ fn transactions_menu_can_be_opened_offline_and_empty_history_is_distinct() {
         result: Ok(Response::Account {
             balance: Ok(0.0),
             rank: Ok((1, 0.0)),
-            transactions: Ok(vec![]),
+            transactions: Ok(page(vec![])),
         }),
     });
     assert!(screen(&mut app).contains("No recent transactions"));
@@ -128,7 +136,11 @@ fn transactions_menu_can_be_opened_offline_and_empty_history_is_distinct() {
 #[tokio::test]
 async fn transaction_history_refreshes_preserves_selection_and_opens_full_details() {
     let (mut app, mut rx, mut mqtt) = app();
-    let (url, http) = fixture::server(vec![(200, fixture::user()), (200, fixture::users())]);
+    let (url, http) = fixture::server(vec![
+        (200, fixture::user()),
+        (200, fixture::transactions()),
+        (200, fixture::users()),
+    ]);
     let response = execute(options(url), &Command::Refresh, false)
         .await
         .unwrap();
@@ -136,11 +148,11 @@ async fn transaction_history_refreshes_preserves_selection_and_opens_full_detail
         command: Command::Refresh,
         result: Ok(response),
     });
-    assert_eq!(http.join().unwrap().len(), 2); // History shares the balance read.
+    assert_eq!(http.join().unwrap().len(), 3);
     press(&mut app, KeyCode::Char('t'));
     let text = screen(&mut app);
     assert!(text.contains("Recent transactions"));
-    assert!(text.contains("Transfer in"));
+    assert!(text.contains("Received"));
     press(&mut app, KeyCode::End);
     assert_eq!(app.strichliste.transaction_selection.selected(), Some(3));
     assert!(screen(&mut app).contains("-1.23"));
@@ -168,7 +180,7 @@ async fn transaction_history_refreshes_preserves_selection_and_opens_full_detail
         result: Ok(Response::Account {
             balance: Ok(12.355),
             rank: Ok((2, 10.5)),
-            transactions: Ok(transactions),
+            transactions: Ok(page(transactions)),
         }),
     });
     assert_eq!(app.strichliste.transaction_selection.selected(), Some(2)); // Still id 103.
@@ -188,6 +200,118 @@ async fn transaction_history_refreshes_preserves_selection_and_opens_full_detail
     app.on_tick();
     assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
     assert!(mqtt.try_recv().is_err());
+}
+
+#[test]
+fn history_comments_are_visible_truncated_by_columns_and_complete_in_details() {
+    let (mut app, _, _) = app();
+    let comment = "coffee with friends after the weekly meeting";
+    let transaction = Transaction {
+        id: 1,
+        created_at: "2026-11-18 18:45:22".into(),
+        value_eur: -1.25,
+        comment: Some(comment.into()),
+    };
+    app.set_transaction_page(page(vec![transaction.clone()]));
+    press(&mut app, KeyCode::Char('t'));
+    let text = screen(&mut app);
+    assert!(text.contains("coffee"));
+    assert!(text.contains("..."));
+    assert!(!text.contains(comment));
+    press(&mut app, KeyCode::Enter);
+    assert!(screen(&mut app).contains(comment));
+    let mut transaction = transaction;
+    transaction.comment = Some("日本語の長いコメント with accents é and emoji 🎉\n".repeat(5));
+    for width in [0, 1, 3, 20, 50, 80, 120] {
+        let row = crate::tui::views::strichliste::transaction_row(&transaction, width, false);
+        assert!(
+            ratatui::text::Span::raw(&row).width() <= width,
+            "{width}: {row}"
+        );
+        assert!(!row.contains('\n'));
+        if width >= 50 {
+            assert!(row.ends_with("..."));
+        }
+    }
+}
+
+#[tokio::test]
+async fn history_pages_navigate_and_refresh_the_current_offset_without_duplicate_reads() {
+    let (mut app, mut rx, _) = app();
+    let (url, server) = fixture::server(vec![
+        (200, fixture::user()),
+        (200, fixture::transaction_page(0, 50, 112)),
+        (200, fixture::users()),
+    ]);
+    let response = execute(options(url), &Command::Refresh, false)
+        .await
+        .unwrap();
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(response),
+    });
+    assert_eq!(app.strichliste.transactions.as_ref().unwrap().len(), 50);
+    assert!(
+        server.join().unwrap()[1]
+            .starts_with("GET /strich-api/user/27/transaction?limit=50&offset=0 ")
+    );
+    press(&mut app, KeyCode::Char('t'));
+    press(&mut app, KeyCode::End);
+    assert!(screen(&mut app).contains("Load older"));
+    press(&mut app, KeyCode::Enter);
+    for offset in [50, 100] {
+        let command = rx.try_recv().unwrap();
+        assert!(matches!(command, Command::Transactions(actual) if actual == offset));
+        press(&mut app, KeyCode::Char('n'));
+        assert!(rx.try_recv().is_err());
+        let (url, server) =
+            fixture::server(vec![(200, fixture::transaction_page(offset, 50, 112))]);
+        let response = execute(options(url), &command, false).await.unwrap();
+        app.handle_strichliste_event(Event {
+            command,
+            result: Ok(response),
+        });
+        assert_eq!(app.strichliste.transaction_offset, offset);
+        server.join().unwrap();
+        press(&mut app, KeyCode::Char('n'));
+    }
+    assert!(rx.try_recv().is_err()); // End of history.
+    assert_eq!(app.strichliste.transactions.as_ref().unwrap().len(), 12);
+    press(&mut app, KeyCode::Char('b'));
+    assert!(matches!(rx.try_recv().unwrap(), Command::Transactions(50)));
+    app.handle_strichliste_event(Event {
+        command: Command::Transactions(50),
+        result: Err("offline".into()),
+    });
+    assert_eq!(app.strichliste.transaction_offset, 100); // Failed navigation keeps the current page.
+    press(&mut app, KeyCode::Char('r'));
+    assert!(matches!(rx.try_recv().unwrap(), Command::RefreshAt(100)));
+    let (url, server) = fixture::server(vec![
+        (200, fixture::user()),
+        (200, fixture::transaction_page(100, 50, 112)),
+        (200, fixture::users()),
+    ]);
+    let response = execute(options(url), &Command::RefreshAt(100), false)
+        .await
+        .unwrap();
+    app.handle_strichliste_event(Event {
+        command: Command::RefreshAt(100),
+        result: Ok(response),
+    });
+    assert_eq!(app.strichliste.transaction_offset, 100);
+    assert_eq!(app.strichliste.transaction_previous, [0, 50]);
+    assert!(server.join().unwrap()[1].contains("limit=50&offset=100"));
+    press(&mut app, KeyCode::Char('b'));
+    let command = rx.try_recv().unwrap();
+    let (url, server) = fixture::server(vec![(200, fixture::transaction_page(50, 50, 112))]);
+    let response = execute(options(url), &command, false).await.unwrap();
+    app.handle_strichliste_event(Event {
+        command,
+        result: Ok(response),
+    });
+    assert_eq!(app.strichliste.transaction_previous, [0]);
+    assert_eq!(app.strichliste.transaction_offset, 50);
+    server.join().unwrap();
 }
 
 #[test]
@@ -435,7 +559,7 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
         result: Ok(Response::Account {
             balance: Ok(12.345),
             rank: Ok((2, 10.5)),
-            transactions: Ok(vec![]),
+            transactions: Ok(page(vec![])),
         }),
     });
     let text = screen(&mut app);
@@ -487,7 +611,11 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
 
 #[tokio::test]
 async fn background_worker_reads_balance_rank_and_dry_run_never_connects() {
-    let (url, http) = fixture::server(vec![(200, fixture::user()), (200, fixture::users())]);
+    let (url, http) = fixture::server(vec![
+        (200, fixture::user()),
+        (200, fixture::transactions()),
+        (200, fixture::users()),
+    ]);
     let (tx, rx) = mpsc::unbounded_channel();
     let (events, mut replies) = mpsc::unbounded_channel();
     spawn_worker(options(url), false, rx, events);
@@ -556,7 +684,7 @@ fn auto_refresh_runs_every_ten_seconds_only_when_the_tab_is_idle_and_visible() {
         result: Ok(Response::Account {
             balance: Ok(1.0),
             rank: Ok((1, 1.0)),
-            transactions: Ok(vec![]),
+            transactions: Ok(page(vec![])),
         }),
     });
     app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(9));

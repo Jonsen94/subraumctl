@@ -48,27 +48,12 @@ pub struct Cli {
 pub struct GlobalArgs {
     /// Strichliste 0.11.0 API base URL, including /strich-api
     #[cfg(feature = "strichliste")]
-    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_URL")]
+    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_URL", default_value = crate::strichliste::DEFAULT_URL)]
     pub strichliste_url: Option<String>,
 
-    /// Your Strichliste user name (exact, case-insensitive match)
+    /// Your Strichliste numeric user id
     #[cfg(feature = "strichliste")]
-    #[arg(
-        long,
-        global = true,
-        env = "SUBRAUMCTL_STRICHLISTE_USER",
-        conflicts_with = "strichliste_user_id"
-    )]
-    pub strichliste_user: Option<String>,
-
-    /// Your Strichliste numeric user id (alternative to --strichliste-user)
-    #[cfg(feature = "strichliste")]
-    #[arg(
-        long,
-        global = true,
-        env = "SUBRAUMCTL_STRICHLISTE_USER_ID",
-        conflicts_with = "strichliste_user"
-    )]
+    #[arg(long, global = true, env = "SUBRAUMCTL_STRICHLISTE_USER_ID")]
     pub strichliste_user_id: Option<u64>,
 
     /// Strichliste HTTP timeout in seconds
@@ -354,8 +339,13 @@ pub struct StrichlisteArgs {
 #[cfg(feature = "strichliste")]
 #[derive(Subcommand, Debug)]
 pub enum StrichlisteCommand {
-    /// Show recent transactions returned by your account (newest first)
-    Transactions,
+    /// Show a page of your transactions (newest first)
+    Transactions {
+        #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u32).range(1..=1000))]
+        limit: u32,
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+    },
     /// Show your current balance in euros
     Balance,
     /// Show your rank by weightedCountOfPurchases (highest first, ties share rank)
@@ -971,21 +961,20 @@ mod tests {
 
     #[cfg(feature = "strichliste")]
     #[test]
-    fn strichliste_requires_positive_amounts_and_unambiguous_account_options() {
+    fn strichliste_requires_positive_amounts_and_numeric_account_options() {
         for amount in ["0", "-1", "NaN", "inf", "1e309", "pi"] {
             assert!(Cli::try_parse_from(["subraumctl", "strichliste", "pay", amount]).is_err());
         }
         let cli = Cli::try_parse_from([
             "subraumctl",
-            "--strichliste-user",
+            "--strichliste-user-id",
             "27",
             "strichliste",
             "pay",
             "0.001",
         ])
         .unwrap();
-        assert_eq!(cli.global.strichliste_user.as_deref(), Some("27"));
-        assert!(cli.global.strichliste_user_id.is_none());
+        assert_eq!(cli.global.strichliste_user_id, Some(27));
         assert!(
             Cli::try_parse_from([
                 "subraumctl",

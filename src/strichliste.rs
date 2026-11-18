@@ -14,11 +14,11 @@ use serde_json::{Value, json};
 use crate::cli::GlobalArgs;
 
 pub const MCP_COMMENT: &str = "triggered by mcp";
+pub const DEFAULT_URL: &str = "https://mate.wahrhe.it/strich-api";
 
 #[derive(Clone, Debug)]
 pub struct Options {
     pub url: Option<String>,
-    pub user: Option<String>,
     pub user_id: Option<u64>,
     pub timeout: Duration,
 }
@@ -26,8 +26,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            url: None,
-            user: None,
+            url: Some(DEFAULT_URL.into()),
             user_id: None,
             timeout: Duration::from_secs(5),
         }
@@ -38,7 +37,6 @@ impl Options {
     pub fn from_global(global: &GlobalArgs) -> Self {
         Self {
             url: global.strichliste_url.clone(),
-            user: global.strichliste_user.clone(),
             user_id: global.strichliste_user_id,
             timeout: Duration::from_secs(global.strichliste_timeout),
         }
@@ -117,13 +115,20 @@ impl Transaction {
 
 pub struct AccountSnapshot {
     pub balance: Result<f64>,
-    pub transactions: Result<Vec<Transaction>>,
+    pub transactions: Result<TransactionPage>,
 }
 
-fn parse_transactions(value: &Value, user_id: u64) -> Result<Vec<Transaction>> {
-    let entries = value["transactions"]
-        .as_array()
-        .ok_or_else(|| eyre!("Strichliste transactions missing or invalid"))?;
+pub const TRANSACTION_PAGE_SIZE: usize = 50;
+
+#[derive(Clone, Debug)]
+pub struct TransactionPage {
+    pub entries: Vec<Transaction>,
+    pub offset: usize,
+    pub total: Option<usize>,
+    pub next_offset: Option<usize>,
+}
+
+fn parse_transactions(entries: &[Value], user_id: u64) -> Result<Vec<Transaction>> {
     let mut ids = std::collections::HashSet::new();
     let mut transactions = entries
         .iter()
@@ -197,25 +202,15 @@ pub struct Client {
     http: reqwest::Client,
     base: reqwest::Url,
     options: Options,
+    user_id: u64,
 }
 
 impl Client {
     pub fn new(options: Options) -> Result<Self> {
-        ensure!(
-            options.user_id.is_some() ^ options.user.is_some(),
-            "configure --strichliste-user or --strichliste-user-id"
-        );
-        ensure!(
-            options
-                .user
-                .as_ref()
-                .is_none_or(|name| !name.trim().is_empty()),
-            "Strichliste user name must not be empty"
-        );
-        let base = options
-            .url
-            .as_deref()
-            .ok_or_else(|| eyre!("configure --strichliste-url"))?;
+        let user_id = options
+            .user_id
+            .ok_or_else(|| eyre!("configure --strichliste-user-id"))?;
+        let base = options.url.as_deref().unwrap_or(DEFAULT_URL);
         let mut base =
             reqwest::Url::parse(base).map_err(|_| eyre!("invalid Strichliste API URL"))?;
         ensure!(
@@ -237,6 +232,7 @@ impl Client {
             http,
             base,
             options,
+            user_id,
         })
     }
 
@@ -342,41 +338,29 @@ impl Client {
     }
 
     fn select<'a>(&self, users: &'a [User]) -> Result<&'a User> {
-        let mut matching = users.iter().filter(|user| {
-            if let Some(id) = self.options.user_id {
-                user.id == id
-            } else {
-                user.name.to_lowercase()
-                    == self.options.user.as_deref().unwrap_or("").to_lowercase()
-            }
-        });
+        let mut matching = users.iter().filter(|user| user.id == self.user_id);
         let user = matching
             .next()
             .ok_or_else(|| eyre!("configured Strichliste user not found"))?;
-        ensure!(
-            matching.next().is_none(),
-            "ambiguous Strichliste name; configure a user id"
-        );
+        ensure!(matching.next().is_none(), "duplicate Strichliste user id");
         Ok(user)
     }
 
     pub async fn current_user(&self) -> Result<User> {
-        if let Some(id) = self.options.user_id {
-            let user = User::parse(&self.get(&format!("user/{id}")).await?)?;
-            ensure!(user.id == id, "Strichliste returned an unexpected user");
-            Ok(user)
-        } else {
-            Ok(self.select(&self.users().await?)?.clone())
-        }
+        let id = self.user_id;
+        let user = User::parse(&self.get(&format!("user/{id}")).await?)?;
+        ensure!(user.id == id, "Strichliste returned an unexpected user");
+        Ok(user)
     }
 
-    /// Recent transactions supplied by the configured account's detail endpoint.
+    /// Account balance and the first page of transactions.
     /// Kept separate from Request so history is not exposed through MCP.
     pub async fn account_snapshot(&self) -> Result<AccountSnapshot> {
-        let id = match self.options.user_id {
-            Some(id) => id,
-            None => self.current_user().await?.id,
-        };
+        self.account_snapshot_at(0).await
+    }
+
+    pub async fn account_snapshot_at(&self, offset: usize) -> Result<AccountSnapshot> {
+        let id = self.user_id;
         let value = self.get(&format!("user/{id}")).await?;
         let user = User::parse(&value)?;
         ensure!(user.id == id, "Strichliste returned an unexpected user");
@@ -384,7 +368,78 @@ impl Client {
             balance: user
                 .balance
                 .ok_or_else(|| eyre!("Strichliste balance missing or invalid")),
-            transactions: parse_transactions(&value, id),
+            transactions: self
+                .transaction_page(id, TRANSACTION_PAGE_SIZE, offset)
+                .await,
+        })
+    }
+
+    /// History remains separate from Request and is not available through MCP.
+    pub async fn transactions(&self, limit: usize, offset: usize) -> Result<TransactionPage> {
+        ensure!(
+            (1..=1000).contains(&limit),
+            "transaction limit must be between 1 and 1000"
+        );
+        let id = self.user_id;
+        self.transaction_page(id, limit, offset).await
+    }
+
+    async fn transaction_page(
+        &self,
+        id: u64,
+        limit: usize,
+        offset: usize,
+    ) -> Result<TransactionPage> {
+        let value = self
+            .get(&format!(
+                "user/{id}/transaction?limit={limit}&offset={offset}"
+            ))
+            .await?;
+        let (entries, total) = if let Some(entries) = value.as_array() {
+            (entries, None)
+        } else {
+            let entries = value["entries"]
+                .as_array()
+                .ok_or_else(|| eyre!("expected Strichliste transaction entries array"))?;
+            if let Some(actual) = page_number(&value, "offset")? {
+                ensure!(
+                    actual == offset,
+                    "unexpected Strichliste transaction page offset"
+                );
+            }
+            if let Some(actual) = page_number(&value, "limit")? {
+                ensure!(
+                    actual > 0 && actual <= limit && entries.len() <= actual,
+                    "invalid Strichliste transaction page limit"
+                );
+            }
+            (entries, page_number(&value, "overallCount")?)
+        };
+        ensure!(
+            entries.len() <= limit,
+            "Strichliste transaction page exceeds requested limit"
+        );
+        let end = offset
+            .checked_add(entries.len())
+            .ok_or_else(|| eyre!("Strichliste transaction offset overflow"))?;
+        if let Some(total) = total {
+            ensure!(
+                entries.is_empty() || end <= total,
+                "Strichliste transactions exceed overallCount"
+            );
+            ensure!(
+                !entries.is_empty() || offset >= total,
+                "Strichliste transaction pagination made no progress"
+            );
+        }
+        let next_offset = (!entries.is_empty()
+            && total.map_or(entries.len() == limit, |total| end < total))
+        .then_some(end);
+        Ok(TransactionPage {
+            entries: parse_transactions(entries, id)?,
+            offset,
+            total,
+            next_offset,
         })
     }
 

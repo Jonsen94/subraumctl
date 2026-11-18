@@ -2,6 +2,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
+    text::Span,
     widgets::{List, ListItem, Paragraph, Wrap},
 };
 
@@ -66,7 +67,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     } else if let Some(error) = &state.error {
         format!("Error: {error}")
     } else if state.message.is_empty() {
-        "r refreshes; account uses --strichliste-user or --strichliste-user-id".into()
+        "r refreshes; configure --strichliste-user-id".into()
     } else {
         state.message.clone()
     };
@@ -148,31 +149,48 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             draw_input(frame, parts[1], &form.input, label, &app.theme, focused);
         }
     } else if state.show_transactions {
-        let title = if state.transactions_stale {
-            "Recent transactions · EUR (previous)"
-        } else {
-            "Recent transactions · EUR"
-        };
+        let count = state.transactions.as_ref().map_or(0, Vec::len);
+        let total = state
+            .transaction_total
+            .map(|total| total.to_string())
+            .unwrap_or_else(|| "?".into());
+        let title = format!(
+            "Recent transactions{} · {}-{}/{total}",
+            if state.transactions_stale {
+                " (previous)"
+            } else {
+                ""
+            },
+            if count == 0 {
+                0
+            } else {
+                state.transaction_offset + 1
+            },
+            state.transaction_offset + count,
+        );
         match &state.transactions {
-            Some(transactions) if !transactions.is_empty() => {
-                let items: Vec<_> = transactions
+            Some(transactions)
+                if !transactions.is_empty() || !state.transaction_previous.is_empty() =>
+            {
+                let mut items: Vec<_> = transactions
                     .iter()
                     .map(|transaction| {
-                        let amount = if state.full_precision {
-                            format!("{:+}", transaction.value_eur)
-                        } else {
-                            format!("{:+.2}", transaction.value_eur)
-                        };
-                        ListItem::new(format!(
-                            "{}  {amount}  {}",
-                            transaction.created_at.escape_debug(),
-                            transaction.kind(),
+                        ListItem::new(transaction_row(
+                            transaction,
+                            rows[2].width.saturating_sub(4) as usize,
+                            state.full_precision,
                         ))
                     })
                     .collect();
+                if state.transaction_next.is_some() {
+                    items.push(ListItem::new("Load older transactions (n)"));
+                }
+                if !state.transaction_previous.is_empty() {
+                    items.push(ListItem::new("Newer transactions (b)"));
+                }
                 frame.render_stateful_widget(
                     List::new(items)
-                        .block(panel(title))
+                        .block(panel(&title))
                         .highlight_symbol("> ")
                         .highlight_style(selection_style(&app.theme)),
                     rows[2],
@@ -187,7 +205,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
                         "Transactions not read. Press r to refresh."
                     })
                     .wrap(Wrap { trim: false })
-                    .block(panel(title)),
+                    .block(panel(&title)),
                     rows[2],
                 );
             }
@@ -204,7 +222,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     }
     frame.render_widget(
         Paragraph::new(if state.show_transactions {
-            "Enter details · r refresh · p precision · t/Esc back"
+            "n older · b newer · Enter details · t/Esc back"
         } else if state.form.is_some() {
             "Enter next/submit · Esc cancel · Ctrl+C quit"
         } else if app.options.connect {
@@ -214,6 +232,76 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
         }),
         rows[3],
     );
+}
+
+pub(crate) fn transaction_row(
+    transaction: &crate::strichliste::Transaction,
+    width: usize,
+    full: bool,
+) -> String {
+    let date = if width >= 75 {
+        format!("{} ", transaction.created_at.escape_debug())
+    } else if width >= 40 {
+        format!(
+            "{} ",
+            transaction
+                .created_at
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .escape_debug()
+        )
+    } else {
+        String::new()
+    };
+    let amount = if full {
+        format!("{:+}", transaction.value_eur)
+    } else {
+        format!("{:+.2}", transaction.value_eur)
+    };
+    let kind = if width >= 75 {
+        transaction.kind()
+    } else {
+        match transaction.kind() {
+            "Transfer out" => "Sent",
+            "Transfer in" => "Received",
+            "Add credit" => "Add",
+            kind => kind,
+        }
+    };
+    let prefix = format!("{date}{amount:>9} {kind:<8} ");
+    let comment = transaction
+        .comment
+        .as_deref()
+        .unwrap_or("")
+        .escape_debug()
+        .to_string();
+    let available = width.saturating_sub(Span::raw(&prefix).width());
+    clip_columns(
+        &format!("{prefix}{}", clip_columns(&comment, available)),
+        width,
+    )
+}
+
+fn clip_columns(text: &str, width: usize) -> String {
+    if Span::raw(text).width() <= width {
+        return text.to_owned();
+    }
+    if width <= 3 {
+        return ".".repeat(width);
+    }
+    let mut prefix = String::new();
+    let mut used = 0;
+    for ch in text.chars() {
+        let size = Span::raw(ch.to_string()).width();
+        if used + size > width - 3 {
+            break;
+        }
+        prefix.push(ch);
+        used += size;
+    }
+    prefix.push_str("...");
+    prefix
 }
 
 fn draw_input(

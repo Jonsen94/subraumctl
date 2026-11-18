@@ -8,14 +8,14 @@ use crate::cli::{GlobalArgs, StrichlisteCommand};
 
 pub async fn run(global: &GlobalArgs, command: StrichlisteCommand) -> Result<()> {
     let (request, comment) = match command {
-        StrichlisteCommand::Transactions => {
+        StrichlisteCommand::Transactions { limit, offset } => {
             if global.dry_run {
                 return print(global, json!({"dry_run": true}));
             }
-            let transactions = Client::new(Options::from_global(global))?
-                .account_snapshot()
-                .await?
-                .transactions?;
+            let page = Client::new(Options::from_global(global))?
+                .transactions(limit as usize, offset)
+                .await?;
+            let transactions = page.entries;
             if global.json {
                 let transactions: Vec<_> = transactions
                     .iter()
@@ -28,7 +28,15 @@ pub async fn run(global: &GlobalArgs, command: StrichlisteCommand) -> Result<()>
                         })
                     })
                     .collect();
-                println!("{}", json!({"transactions": transactions}));
+                println!(
+                    "{}",
+                    json!({
+                        "transactions": transactions,
+                        "offset": page.offset,
+                        "overall_count": page.total,
+                        "next_offset": page.next_offset,
+                    })
+                );
             } else if !global.quiet {
                 if transactions.is_empty() {
                     println!("No recent transactions.");
