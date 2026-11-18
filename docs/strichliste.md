@@ -1,19 +1,20 @@
 # Strichliste 0.11.0
 
-Optional CLI and TUI integration for the deployed legacy 0.11.0 variant, including its
+CLI and TUI integration for the deployed legacy 0.11.0 variant, including its
 transfer/comment extension and `weightedCountOfPurchases` user field.
 
 ## Build and configure
 
 ```sh
-cargo build --release --features strichliste
+cargo build --release
 # Or include restricted MCP tools:
-cargo build --release --features mcp,strichliste
+cargo build --release --features mcp
 ```
 
-Nix packages: `.#subraumctl-strichliste` and `.#subraumctl-mcp-strichliste`.
-The same `strichliste` feature enables both CLI commands and the TUI tab.
-Default builds do not include Strichliste commands, the tab, or connection options.
+Nix packages: `.#subraumctl` and `.#subraumctl-mcp`.
+The `strichliste` feature is enabled by default and includes both CLI commands
+and the TUI tab. Build with `--no-default-features` to omit Strichliste commands,
+the tab, and its connection options.
 
 Set your numeric account id. The API URL defaults to
 `https://mate.wahrhe.it/strich-api`:
@@ -82,7 +83,7 @@ the recipient/sender and booking note remain visible.
 With the same URL and account environment variables configured:
 
 ```sh
-cargo build --features strichliste
+cargo build
 ./target/debug/subraumctl tui --view strichliste
 ```
 
@@ -135,7 +136,7 @@ opt-in and forced MCP comment apply only to MCP.
 
 ## Restricted MCP
 
-Build with `--features mcp,strichliste` and supply the same account configuration.
+Build with `--features mcp` and supply the same account configuration.
 The `strichliste` permission group defaults to `r`:
 
 | Tool | Arguments | Result |

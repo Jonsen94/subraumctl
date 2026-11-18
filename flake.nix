@@ -124,9 +124,9 @@
               cargoClippyExtraArgs = "--all-targets -- -D warnings";
             });
 
-            strichliste-tests = craneLib.cargoTest (commonArgs // {
+            no-default-features-tests = craneLib.cargoTest (commonArgs // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--features strichliste";
+              cargoExtraArgs = "--no-default-features";
             });
 
             all-features-tests = craneLib.cargoTest (commonArgs // {

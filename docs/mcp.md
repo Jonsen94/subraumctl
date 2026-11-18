@@ -123,7 +123,7 @@ static station ids and names; `music_station` accepts
 `music_previous` take no arguments. The default MPD endpoint is
 `audiomaster:6600`; see [music playback and stations](music.md).
 
-Strichliste tools require both `mcp` and `strichliste` build features. The account
+Strichliste tools require `mcp` and the default-enabled `strichliste` build feature. The account
 and API URL are fixed by startup options/environment. Balance and rank return
 only the configured user's values; there are no recipient, search, other-user,
 transfer or history tools. Both payment tools are disabled by default and require

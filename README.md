@@ -33,8 +33,8 @@ Issues are disabled. If you find an issue, send patches.
 TUI mouse interaction is optional and disabled by default. Build with
 `--features tui-mouse` to include it.
 
-Strichliste CLI and TUI are optional: build with `--features strichliste`, or
-`--features mcp,strichliste` for its restricted MCP tools.
+Strichliste CLI and TUI are included by default. Build with `--features mcp`
+for its restricted MCP tools. Use `--no-default-features` to omit Strichliste.
 
 # License
 
