@@ -49,10 +49,11 @@ pub enum Section {
     Climate,
     Power,
     Music,
+    Soundboard,
 }
 
 impl Section {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Overview,
         Self::Lighting,
         Self::WhiteLight,
@@ -68,6 +69,7 @@ impl Section {
         Self::Climate,
         Self::Power,
         Self::Music,
+        Self::Soundboard,
     ];
 
     pub fn index(self) -> usize {
@@ -87,6 +89,7 @@ impl Section {
             Self::Climate => 12,
             Self::Power => 13,
             Self::Music => 14,
+            Self::Soundboard => 15,
         }
     }
 
@@ -111,6 +114,7 @@ impl Section {
             Self::Climate => "Climate",
             Self::Power => "Power",
             Self::Music => "Music",
+            Self::Soundboard => "Soundboard",
         }
     }
 
@@ -139,6 +143,7 @@ impl Section {
             TuiView::Climate => Self::Climate,
             TuiView::Power => Self::Power,
             TuiView::Music => Self::Music,
+            TuiView::Soundboard => Self::Soundboard,
         }
     }
 }
@@ -340,6 +345,7 @@ pub struct App {
     pub power: super::power::State,
     pub music_tx: Option<UnboundedSender<crate::music::Request>>,
     pub music: super::music::State,
+    pub soundboard: super::soundboard::State,
     pub graphs: super::graphs::Graphs,
     pub should_quit: bool,
     pub section: Section,
@@ -404,6 +410,7 @@ impl App {
             power: super::power::State::default(),
             music_tx: None,
             music: super::music::State::default(),
+            soundboard: super::soundboard::State::default(),
             should_quit: false,
             section,
             zone: FocusZone::Content,
@@ -579,10 +586,15 @@ impl App {
             .split(body);
         if body_columns[0].contains(Position::new(mouse.column, mouse.row)) {
             self.zone = FocusZone::Sidebar;
-            let index = mouse
-                .row
-                .saturating_sub(body_columns[0].y.saturating_add(1))
-                as usize;
+            let visible = body_columns[0].height.saturating_sub(2) as usize;
+            let start = self
+                .section
+                .index()
+                .saturating_sub(visible.saturating_sub(1));
+            let index = start
+                + mouse
+                    .row
+                    .saturating_sub(body_columns[0].y.saturating_add(1)) as usize;
             if index < Section::ALL.len() {
                 self.change_section(Section::ALL[index]);
             }
@@ -637,6 +649,7 @@ impl App {
                     match pending {
                         PendingCommand::Device { actions, .. } => self.send_actions(actions),
                         PendingCommand::Heizung(request) => self.send_heizung(request),
+                        PendingCommand::Soundboard(request) => self.send_soundboard(request),
                     }
                 } else {
                     self.set_status("command cancelled", StatusKind::Info);
@@ -1011,6 +1024,7 @@ impl App {
             | Section::Power
             | Section::Audio
             | Section::Music => {}
+            Section::Soundboard => self.handle_soundboard_click(mouse, area, double_click),
         }
     }
 
@@ -1019,6 +1033,18 @@ impl App {
             return;
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if self.popup.is_none()
+            && self.section == Section::Soundboard
+            && self.zone == FocusZone::Content
+            && self.soundboard.editing
+        {
+            if ctrl && matches!(key.code, KeyCode::Char('c' | 'C')) {
+                self.should_quit = true;
+            } else {
+                self.handle_soundboard_input(key);
+            }
+            return;
+        }
         // Free-form food and names must accept q/Q and all global shortcuts.
         // Ctrl+C still exits; Escape cancels the current form.
         if !ctrl
@@ -1241,6 +1267,7 @@ impl App {
                     match pending {
                         PendingCommand::Device { actions, .. } => self.send_actions(actions),
                         PendingCommand::Heizung(request) => self.send_heizung(request),
+                        PendingCommand::Soundboard(request) => self.send_soundboard(request),
                     }
                 } else if matches!(key.code, KeyCode::Char('n') | KeyCode::Esc)
                     || (matches!(key.code, KeyCode::Enter) && !selected.is_confirm())
@@ -1606,6 +1633,7 @@ impl App {
             Section::Climate => self.handle_climate_key(key),
             Section::Power => self.handle_power_key(key),
             Section::Music => self.handle_music_key(key),
+            Section::Soundboard => self.handle_soundboard_key(key),
         }
     }
 
@@ -3008,6 +3036,7 @@ mod tests {
                 timeout: std::time::Duration::from_secs(1),
             },
             influx: crate::influx::Options::default(),
+            soundboard: crate::soundboard::Options::default(),
             graph_minutes: 60,
             graph_layout: crate::cli::GraphLayout::Table,
             music: crate::music::Options::default(),
@@ -3193,6 +3222,7 @@ mod tests {
                 timeout: std::time::Duration::from_secs(1),
             },
             influx: crate::influx::Options::default(),
+            soundboard: crate::soundboard::Options::default(),
             graph_minutes: 60,
             graph_layout: crate::cli::GraphLayout::Table,
             music: crate::music::Options::default(),

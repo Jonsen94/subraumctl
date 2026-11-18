@@ -29,6 +29,7 @@ pub enum PendingCommand {
         destructive: bool,
     },
     Heizung(crate::heizung::Request),
+    Soundboard(crate::soundboard::Request),
 }
 
 impl PendingCommand {
@@ -43,6 +44,12 @@ impl PendingCommand {
                 return vec![
                     "Set heating targets".into(),
                     format!("AMQP cmd/heizung {}", request.args()),
+                ];
+            }
+            Self::Soundboard(request) => {
+                return vec![
+                    "Play soundboard sample".into(),
+                    format!("AMQP cmd/{} {}", request.command(), request.args()),
                 ];
             }
         };

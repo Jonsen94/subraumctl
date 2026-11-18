@@ -29,6 +29,7 @@ fn app(connect: bool) -> (App, UnboundedReceiver<Request>) {
                 ..crate::music::Options::default()
             },
             influx: crate::influx::Options::default(),
+            soundboard: crate::soundboard::Options::default(),
             graph_minutes: 60,
             graph_layout: crate::cli::GraphLayout::Table,
             verbose: 0,

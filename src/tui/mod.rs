@@ -10,6 +10,7 @@ mod music;
 mod pizzamat;
 mod power;
 mod safe_mode;
+mod soundboard;
 mod theme;
 mod traffic;
 mod ui;
@@ -51,6 +52,7 @@ pub struct TuiOptions {
     pub pizzamat: crate::pizzamat::Options,
     pub heizung: crate::heizung::Options,
     pub music: crate::music::Options,
+    pub soundboard: crate::soundboard::Options,
     pub influx: crate::influx::Options,
     pub graph_minutes: u64,
     pub graph_layout: crate::cli::GraphLayout,
@@ -130,6 +132,15 @@ pub async fn run(options: TuiOptions) -> Result<()> {
     );
     app.graphs.tx = Some(graph_tx);
     app.music_tx = Some(music_tx);
+    let (soundboard_tx, soundboard_rx) = mpsc::unbounded_channel();
+    let (soundboard_event_tx, mut soundboard_event_rx) = mpsc::unbounded_channel();
+    soundboard::spawn_worker(
+        app.options.soundboard.clone(),
+        app.options.dry_run,
+        soundboard_rx,
+        soundboard_event_tx,
+    );
+    app.soundboard.tx = Some(soundboard_tx);
     app.maybe_refresh_climate();
     app.maybe_refresh_power();
     app.maybe_refresh_music();
@@ -161,6 +172,7 @@ pub async fn run(options: TuiOptions) -> Result<()> {
             Some(event) = pizza_event_rx.recv() => app.handle_pizzamat_event(event),
             Some(event) = heizung_event_rx.recv() => app.handle_heizung_event(event),
             Some(event) = music_event_rx.recv() => app.handle_music_event(event),
+            Some(event) = soundboard_event_rx.recv() => app.handle_soundboard_event(event),
             Some(event) = climate_event_rx.recv() => app.handle_climate_event(event),
             Some(event) = power_event_rx.recv() => app.handle_power_event(event),
             Some(event) = graph_event_rx.recv() => app.handle_graph_event(event),

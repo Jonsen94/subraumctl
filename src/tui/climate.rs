@@ -189,6 +189,7 @@ mod tests {
                     timeout: Duration::from_secs(1),
                 },
                 influx: Options::default(),
+                soundboard: crate::soundboard::Options::default(),
                 graph_minutes: 60,
                 graph_layout: crate::cli::GraphLayout::Table,
                 music: crate::music::Options::default(),

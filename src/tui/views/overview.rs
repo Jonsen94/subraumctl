@@ -146,5 +146,6 @@ fn description(section: Section) -> &'static str {
         Section::Climate => "measured room temperature and humidity",
         Section::Power => "meter power by phase and total",
         Section::Music => "MPD playback and radio stations",
+        Section::Soundboard => "search and play EDI sound samples",
     }
 }

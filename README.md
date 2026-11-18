@@ -20,6 +20,8 @@ Rust CLI and keyboard-driven TUI for the subraum MQTT control system.
 
 [MPD music playback and radio stations in the TUI, CLI and MCP](docs/music.md)
 
+[Searchable Soundboard tab over EDI AMQP](docs/soundboard.md)
+
 # Issues
 
 Issues are disabled. If you find an issue, send patches.

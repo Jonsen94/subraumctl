@@ -20,6 +20,7 @@ pub mod overview;
 pub mod pizzamat;
 pub mod power;
 pub mod smoothie;
+pub mod soundboard;
 pub mod system;
 pub mod theme;
 pub mod white_light;
@@ -41,6 +42,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
         Section::Climate => climate::draw(frame, area, app),
         Section::Power => power::draw(frame, area, app),
         Section::Music => music::draw(frame, area, app),
+        Section::Soundboard => soundboard::draw(frame, area, app),
     }
 }
 
