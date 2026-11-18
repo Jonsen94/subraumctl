@@ -114,7 +114,12 @@ impl User {
                 .ok_or_else(|| eyre!("invalid Strichliste user name"))?
                 .to_owned(),
             balance: number(&value["balance"]),
-            weighted_count: number(&value["weightedCountOfPurchases"]),
+            // The legacy aggregate is null for accounts without purchases.
+            weighted_count: match value.get("weightedCountOfPurchases") {
+                Some(Value::Null) => Some(0.0),
+                Some(value) => number(value),
+                None => None,
+            },
         })
     }
 

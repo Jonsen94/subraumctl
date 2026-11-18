@@ -97,7 +97,7 @@ fn options(url: String) -> Options {
 
 #[test]
 fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
-    for (focus, pay) in [(1, true), (2, false)] {
+    for (focus, pay) in [(0, true), (1, false)] {
         let (mut app, mut rx, mut mqtt) = app();
         book_form(&mut app, focus, "0.001", "qQcdr?S[]");
         assert!(!app.should_quit);
@@ -127,7 +127,7 @@ fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
     }
     for amount in ["0", "-1", "NaN", "inf"] {
         let (mut app, mut rx, _) = app();
-        app.strichliste.focus = 1;
+        app.strichliste.focus = 0;
         press(&mut app, KeyCode::Enter);
         type_text(&mut app, amount);
         press(&mut app, KeyCode::Enter);
@@ -142,7 +142,7 @@ fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
     }
     let (mut app, mut rx, _) = app();
     app.safe_mode = false;
-    book_form(&mut app, 1, "1", "");
+    book_form(&mut app, 0, "1", "");
     assert!(matches!(
         rx.try_recv().unwrap(),
         Command::Book {
@@ -156,7 +156,7 @@ fn payment_forms_own_text_keys_validate_amounts_and_obey_safe_mode() {
 #[tokio::test]
 async fn recipient_search_excludes_self_then_transfers_once_with_the_supplied_contract() {
     let (mut app, mut rx, _) = app();
-    app.strichliste.focus = 3;
+    app.strichliste.focus = 2;
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "o");
     press(&mut app, KeyCode::Enter);
@@ -211,7 +211,7 @@ async fn recipient_search_excludes_self_then_transfers_once_with_the_supplied_co
 #[test]
 fn cancelled_search_does_not_reopen_the_form_or_send_and_global_navigation_recovers() {
     let (mut app, mut rx, _) = app();
-    app.strichliste.focus = 3;
+    app.strichliste.focus = 2;
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "qQcdr?S[]");
     assert!(!app.should_quit);
@@ -237,11 +237,12 @@ fn cancelled_search_does_not_reopen_the_form_or_send_and_global_navigation_recov
 
 #[test]
 fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_on_error() {
-    let (mut app, mut rx, _) = app();
+    let (mut app, mut rx, mut mqtt) = app();
     app.maybe_refresh_strichliste();
     assert!(rx.try_recv().is_err());
-    press(&mut app, KeyCode::Enter);
+    press(&mut app, KeyCode::Char('r'));
     assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
+    assert!(mqtt.try_recv().is_err());
     app.handle_strichliste_event(Event {
         command: Command::Refresh,
         result: Ok(Response::Account {
@@ -251,7 +252,7 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
     });
     let text = screen(&mut app);
     for expected in [
-        "Balance: 12.345 EUR",
+        "Balance: 12.35 EUR",
         "Rank: 2",
         "weighted purchases: 10.5",
         "Add credit",
@@ -262,7 +263,7 @@ fn reads_respect_no_connect_refresh_after_submission_and_preserve_stale_values_o
     app.options.connect = true;
     app.maybe_refresh_strichliste();
     app.on_tick();
-    assert!(rx.try_recv().is_err()); // One-shot, never background polling.
+    assert!(rx.try_recv().is_err()); // No repeat before the refresh interval.
     app.handle_strichliste_event(Event {
         command: Command::Book {
             request: Request::Pay(0.01),
@@ -351,12 +352,91 @@ async fn background_worker_reads_balance_rank_and_dry_run_never_connects() {
     assert!(replies.recv().await.is_none());
 }
 
+#[test]
+fn auto_refresh_runs_every_ten_seconds_only_when_the_tab_is_idle_and_visible() {
+    let (mut app, mut rx, mut mqtt) = app();
+    app.options.connect = true;
+    app.on_tick();
+    assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
+    app.on_tick();
+    press(&mut app, KeyCode::Char('r'));
+    assert!(rx.try_recv().is_err()); // An in-flight read is never queued twice.
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Ok(Response::Account {
+            balance: Ok(1.0),
+            rank: Ok((1, 1.0)),
+        }),
+    });
+    app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(9));
+    app.on_tick();
+    assert!(rx.try_recv().is_err());
+    app.strichliste.last_refresh = Some(Instant::now() - Duration::from_secs(11));
+    app.section = Section::Overview;
+    app.on_tick();
+    assert!(rx.try_recv().is_err());
+    app.section = Section::Strichliste;
+    press(&mut app, KeyCode::Enter);
+    app.on_tick();
+    assert!(rx.try_recv().is_err()); // Editing takes priority over automatic reads.
+    press(&mut app, KeyCode::Esc);
+    app.popup = Some(Popup::Quit {
+        selected: ConfirmChoice::Cancel,
+    });
+    app.on_tick();
+    assert!(rx.try_recv().is_err());
+    press(&mut app, KeyCode::Esc);
+    app.on_tick();
+    assert!(matches!(rx.try_recv().unwrap(), Command::Refresh));
+    app.handle_strichliste_event(Event {
+        command: Command::Refresh,
+        result: Err("offline".into()),
+    });
+    app.on_tick();
+    assert!(rx.try_recv().is_err()); // Errors are also throttled.
+    press(&mut app, KeyCode::Char('r'));
+    assert!(matches!(rx.try_recv().unwrap(), Command::Refresh)); // Explicit refresh bypasses timer.
+    assert!(mqtt.try_recv().is_err()); // r did not reconnect MQTT.
+}
+
+#[test]
+fn balance_is_rounded_by_default_and_precision_toggle_only_changes_presentation() {
+    let (mut app, mut rx, mut mqtt) = app();
+    let value = -2.4181945088546075;
+    app.strichliste.balance = Some(value);
+    let text = screen(&mut app);
+    assert!(text.contains("Balance: -2.42 EUR"));
+    assert!(text.contains("rounded to cents"));
+    assert!(!text.contains("Refresh balance and rank"));
+    assert!(text.contains("r refresh"));
+    press(&mut app, KeyCode::Char('p'));
+    let text = screen(&mut app);
+    assert!(text.contains("Balance: -2.4181945088546075 EUR"));
+    assert!(text.contains("full precision"));
+    assert_eq!(app.strichliste.balance, Some(value));
+    press(&mut app, KeyCode::Char('p'));
+    assert!(screen(&mut app).contains("Balance: -2.42 EUR"));
+    app.strichliste.balance = Some(-0.001);
+    assert!(screen(&mut app).contains("Balance: 0.00 EUR"));
+    assert!(rx.try_recv().is_err());
+    assert!(mqtt.try_recv().is_err());
+
+    press(&mut app, KeyCode::Enter); // Pay is now the first action.
+    type_text(&mut app, "0.01");
+    press(&mut app, KeyCode::Enter);
+    type_text(&mut app, "pr");
+    assert_eq!(app.strichliste.form.as_ref().unwrap().input.value(), "pr");
+    assert!(!app.strichliste.full_precision);
+    assert!(rx.try_recv().is_err());
+    assert!(mqtt.try_recv().is_err());
+}
+
 #[cfg(feature = "tui-mouse")]
 #[test]
 fn mouse_payment_confirmation_uses_the_same_guarded_dispatch() {
     use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
     let (mut app, mut rx, _) = app();
-    book_form(&mut app, 2, "1", "cash");
+    book_form(&mut app, 1, "1", "cash");
     app.handle_mouse(
         MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),

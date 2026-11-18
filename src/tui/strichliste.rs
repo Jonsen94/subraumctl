@@ -1,5 +1,7 @@
 //! Serial HTTP account operations and cancellable payment forms, independent of MQTT.
 
+use std::time::{Duration, Instant};
+
 use crossterm::event::{Event as InputEvent, KeyCode, KeyEvent};
 use eyre::{Result, ensure, eyre};
 use ratatui::widgets::ListState;
@@ -11,12 +13,8 @@ use super::safe_mode::{ConfirmChoice, PendingCommand};
 use super::traffic::{TrafficDirection, TrafficEntry, now_hms};
 use crate::strichliste::{Client, Options, Request, User, cents, parse_amount};
 
-pub const ACTIONS: [&str; 4] = [
-    "Refresh balance and rank",
-    "Pay",
-    "Add credit",
-    "Send to another user",
-];
+pub const ACTIONS: [&str; 3] = ["Pay", "Add credit", "Send to another user"];
+pub const REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug)]
 pub enum Command {
@@ -152,7 +150,8 @@ pub struct State {
     pub balance_stale: bool,
     pub rank_stale: bool,
     pub busy: bool,
-    pub initial_read: bool,
+    pub last_refresh: Option<Instant>,
+    pub full_precision: bool,
     pub message: String,
     pub error: Option<String>,
     pub form: Option<Form>,
@@ -245,8 +244,13 @@ impl App {
     pub(super) fn maybe_refresh_strichliste(&mut self) {
         if self.section == Section::Strichliste
             && self.options.connect
-            && !self.strichliste.initial_read
             && !self.strichliste.busy
+            && self.strichliste.form.is_none()
+            && self.popup.is_none()
+            && self
+                .strichliste
+                .last_refresh
+                .is_none_or(|at| at.elapsed() >= REFRESH_INTERVAL)
         {
             self.send_strichliste(Command::Refresh);
         }
@@ -261,18 +265,18 @@ impl App {
             KeyCode::Down => self.strichliste.focus = (self.strichliste.focus + 1) % ACTIONS.len(),
             KeyCode::Home => self.strichliste.focus = 0,
             KeyCode::End => self.strichliste.focus = ACTIONS.len() - 1,
+            KeyCode::Char('r') => self.send_strichliste(Command::Refresh),
+            KeyCode::Char('p') => {
+                self.strichliste.full_precision = !self.strichliste.full_precision
+            }
             KeyCode::Enter if !self.strichliste.busy => {
-                if self.strichliste.focus == 0 {
-                    self.send_strichliste(Command::Refresh);
-                } else {
-                    let kind = match self.strichliste.focus {
-                        1 => Kind::Pay,
-                        2 => Kind::Add,
-                        _ => Kind::Send,
-                    };
-                    self.strichliste.form = Some(Form::new(kind));
-                    self.strichliste.error = None;
-                }
+                let kind = match self.strichliste.focus {
+                    0 => Kind::Pay,
+                    1 => Kind::Add,
+                    _ => Kind::Send,
+                };
+                self.strichliste.form = Some(Form::new(kind));
+                self.strichliste.error = None;
             }
             _ => {}
         }
@@ -382,6 +386,9 @@ impl App {
             self.set_status("Strichliste is busy", StatusKind::Info);
             return;
         }
+        if matches!(command, Command::Refresh) {
+            self.strichliste.last_refresh = Some(Instant::now());
+        }
         let error = command.validate().err().map(|error| error.to_string());
         let message = command.preview_lines().join(" | ");
         let error = error.or_else(|| {
@@ -402,9 +409,6 @@ impl App {
             self.set_status(error, StatusKind::Error);
             return;
         }
-        if matches!(command, Command::Refresh) {
-            self.strichliste.initial_read = true;
-        }
         if !self.options.dry_run && matches!(command, Command::Book { .. } | Command::Send { .. }) {
             self.strichliste.balance_stale = true;
             self.strichliste.rank_stale = true;
@@ -424,6 +428,9 @@ impl App {
 
     pub(super) fn handle_strichliste_event(&mut self, event: Event) {
         self.strichliste.busy = false;
+        if matches!(event.command, Command::Refresh) {
+            self.strichliste.last_refresh = Some(Instant::now());
+        }
         self.strichliste.error = None;
         let mut refresh = false;
         let message = match event.result {

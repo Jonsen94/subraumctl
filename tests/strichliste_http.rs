@@ -261,6 +261,32 @@ async fn missing_scores_ambiguous_names_and_mismatched_ids_fail_closed() {
 }
 
 #[tokio::test]
+async fn null_purchase_scores_count_as_zero_and_malformed_scores_still_fail() {
+    let mut users = fixture::users();
+    users["entries"][0]["weightedCountOfPurchases"] = Value::Null;
+    let (url, server) = fixture::server(vec![(200, users.clone())]);
+    let result = execute_mcp(options(url), &Request::Rank, false)
+        .await
+        .unwrap();
+    // Other and Tie have purchases; the configured user ties with Lower at zero.
+    assert_eq!(
+        result,
+        json!({"rank": 3, "weighted_count_of_purchases": 0.0})
+    );
+    server.join().unwrap();
+    for invalid in [json!("NaN"), json!("unknown"), json!(false)] {
+        users["entries"][1]["weightedCountOfPurchases"] = invalid;
+        let (url, server) = fixture::server(vec![(200, users.clone())]);
+        assert!(
+            execute_mcp(options(url), &Request::Rank, false)
+                .await
+                .is_err()
+        );
+        server.join().unwrap();
+    }
+}
+
+#[tokio::test]
 async fn invalid_amounts_dry_run_and_errors_never_leak_raw_data() {
     for amount in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::MAX] {
         assert!(

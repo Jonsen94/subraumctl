@@ -1155,6 +1155,11 @@ impl App {
         }
         if self.zone == FocusZone::Content {
             match (self.section, key.code) {
+                #[cfg(feature = "strichliste")]
+                (Section::Strichliste, KeyCode::Char('r')) => {
+                    self.handle_strichliste_key(key);
+                    return;
+                }
                 (Section::WhiteLight, KeyCode::Char('w')) => {
                     self.white_light.focus = 0;
                     return;
@@ -2849,6 +2854,8 @@ impl App {
         self.maybe_refresh_climate();
         self.maybe_refresh_power();
         self.poll_music();
+        #[cfg(feature = "strichliste")]
+        self.maybe_refresh_strichliste();
         self.throbber.calc_next();
         let clear_status = self
             .status

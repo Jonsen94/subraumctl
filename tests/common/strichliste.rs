@@ -17,7 +17,7 @@ pub fn users() -> Value {
         user(),
         {"id": 30, "name": "Other", "balance": -999, "weightedCountOfPurchases": 15},
         {"id": 31, "name": "Tie", "balance": 0, "weightedCountOfPurchases": 10.5},
-        {"id": 32, "name": "Lower", "balance": 100000, "weightedCountOfPurchases": 1}
+        {"id": 32, "name": "Lower", "balance": 100000, "weightedCountOfPurchases": null}
     ]})
 }
 

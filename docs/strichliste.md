@@ -54,8 +54,9 @@ prompt to search again, or empty input/EOF at either prompt to cancel without a
 transaction. More than 20 matches require a narrower search.
 
 Rank is `1 + number of users with a strictly higher weightedCountOfPurchases`.
-Ties share a rank (1, 2, 2, 4); balances do not affect rank. Missing/invalid scores
-fail the operation instead of producing an incomplete rank.
+Ties share a rank (1, 2, 2, 4); balances do not affect rank. Explicit null scores
+mean no purchases and count as zero. Missing or malformed scores fail the
+operation instead of producing an incomplete rank.
 
 `--json` emits a JSON result; `--quiet` suppresses human results. Interactive
 prompts go to stderr. `--dry-run` performs no HTTP requests, including no user
@@ -72,8 +73,14 @@ cargo build --features strichliste
 
 Choose **Strichliste** in the sidebar or start directly with `--view strichliste`.
 The tab shows your balance in euros and your rank by weighted purchase count.
-It reads once when first opened; `--no-connect` suppresses that initial read.
-**Refresh balance and rank** works manually, independently of MQTT.
+It refreshes automatically every 10 seconds while the tab is visible and idle;
+`--no-connect` disables automatic reads. **r** refreshes immediately, independently
+of MQTT, when the content panel is focused. Editing forms, pending confirmations,
+and in-flight requests defer automatic refreshes.
+
+Balances default to two decimal places (for example `-2.42 EUR`), labelled
+**rounded to cents**. **p** toggles **full precision** without changing the stored
+balance or any transaction amounts. JSON/MCP results retain full precision.
 
 - Use **Up/Down**, then **Enter** to choose **Pay**, **Add credit**, or **Send**.
 - Pay/add prompt for a positive euro amount and an optional comment.

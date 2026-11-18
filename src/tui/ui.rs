@@ -290,6 +290,18 @@ fn draw_status(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     let first = bindings_line(keymap::global_bindings(), &app.theme);
+    #[cfg(feature = "strichliste")]
+    let first = if app.section == Section::Strichliste && app.zone == FocusZone::Content {
+        let mut bindings = keymap::global_bindings().to_vec();
+        for binding in &mut bindings {
+            if binding.keys == "c/d/r" {
+                binding.keys = "c/d";
+            }
+        }
+        bindings_line(&bindings, &app.theme)
+    } else {
+        first
+    };
     let context = if app.zone == FocusZone::Content {
         keymap::section_bindings(app.section)
     } else {

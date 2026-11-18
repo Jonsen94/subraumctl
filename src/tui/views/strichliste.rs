@@ -28,7 +28,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     let stale = |yes| if yes { " (previous)" } else { "" };
     let balance = state
         .balance
-        .map(|value| format!("{value} EUR"))
+        .map(|value| {
+            if state.full_precision {
+                format!("{value} EUR")
+            } else {
+                let rounded = format!("{value:.2}");
+                format!("{} EUR", if rounded == "-0.00" { "0.00" } else { &rounded })
+            }
+        })
         .unwrap_or_else(|| "not read".into());
     let rank = state
         .rank
@@ -40,7 +47,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             stale(state.balance_stale),
             stale(state.rank_stale),
         ))
-        .block(panel("Strichliste")),
+        .block(panel(if state.full_precision {
+            "Strichliste · full precision (p: round)"
+        } else {
+            "Strichliste · rounded to cents (p: full)"
+        })),
         rows[0],
     );
     let message = if state.busy {
@@ -48,7 +59,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     } else if let Some(error) = &state.error {
         format!("Error: {error}")
     } else if state.message.is_empty() {
-        "Enter refreshes; account uses --strichliste-user or --strichliste-user-id".into()
+        "r refreshes; account uses --strichliste-user or --strichliste-user-id".into()
     } else {
         state.message.clone()
     };
@@ -150,8 +161,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
     frame.render_widget(
         Paragraph::new(if state.form.is_some() {
             "Enter next/submit · Esc cancel · Ctrl+C quit"
+        } else if app.options.connect {
+            "Auto 10s · r refresh · p precision · Enter activate"
         } else {
-            "Up/Down select · Enter activate"
+            "Auto off · r refresh · p precision · Enter activate"
         }),
         rows[3],
     );
